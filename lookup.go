@@ -10,6 +10,17 @@ import (
 // match the mongo document structure (payload is in a sub dict)
 var prefix = "_payload."
 
+// getField translate a schema field into a MongoDB field:
+//
+//  - prefixed with _payload.
+//  - id -> _id with no prefix in order to tape on the mongo primary key
+func getField(f string) string {
+	if f == "id" {
+		return "_id"
+	}
+	return prefix + f
+}
+
 // getQuery transform a resource.Lookup into a Mongo query
 func getQuery(l *resource.Lookup) (bson.M, error) {
 	return translateQuery(l.Filter())
@@ -25,9 +36,9 @@ func getSort(l *resource.Lookup) []string {
 	s := make([]string, ln)
 	for i, sort := range l.Sort() {
 		if len(sort) > 0 && sort[0] == '-' {
-			s[i] = "-" + prefix + sort[1:]
+			s[i] = "-" + getField(sort[1:])
 		} else {
-			s[i] = prefix + sort
+			s[i] = getField(sort)
 		}
 	}
 	return s
@@ -58,21 +69,21 @@ func translateQuery(q schema.Query) (bson.M, error) {
 			}
 			b["$or"] = s
 		case schema.In:
-			b[prefix+t.Field] = bson.M{"$in": valuesToInterface(t.Values)}
+			b[getField(t.Field)] = bson.M{"$in": valuesToInterface(t.Values)}
 		case schema.NotIn:
-			b[prefix+t.Field] = bson.M{"$nin": valuesToInterface(t.Values)}
+			b[getField(t.Field)] = bson.M{"$nin": valuesToInterface(t.Values)}
 		case schema.Equal:
-			b[prefix+t.Field] = t.Value
+			b[getField(t.Field)] = t.Value
 		case schema.NotEqual:
-			b[prefix+t.Field] = bson.M{"$ne": t.Value}
+			b[getField(t.Field)] = bson.M{"$ne": t.Value}
 		case schema.GreaterThan:
-			b[prefix+t.Field] = bson.M{"$gt": t.Value}
+			b[getField(t.Field)] = bson.M{"$gt": t.Value}
 		case schema.GreaterOrEqual:
-			b[prefix+t.Field] = bson.M{"$gte": t.Value}
+			b[getField(t.Field)] = bson.M{"$gte": t.Value}
 		case schema.LowerThan:
-			b[prefix+t.Field] = bson.M{"$lt": t.Value}
+			b[getField(t.Field)] = bson.M{"$lt": t.Value}
 		case schema.LowerOrEqual:
-			b[prefix+t.Field] = bson.M{"$lte": t.Value}
+			b[getField(t.Field)] = bson.M{"$lte": t.Value}
 		default:
 			return nil, resource.ErrNotImplemented
 		}

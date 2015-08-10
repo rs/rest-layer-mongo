@@ -30,6 +30,9 @@ func callGetSort(s string, v schema.Validator) []string {
 func TestGetQuery(t *testing.T) {
 	var b bson.M
 	var err error
+	b, err = callGetQuery(schema.Query{schema.Equal{Field: "id", Value: "foo"}})
+	assert.NoError(t, err)
+	assert.Equal(t, bson.M{"_id": "foo"}, b)
 	b, err = callGetQuery(schema.Query{schema.Equal{Field: "f", Value: "foo"}})
 	assert.NoError(t, err)
 	assert.Equal(t, bson.M{"_payload.f": "foo"}, b)
@@ -74,8 +77,10 @@ func TestGetQueryInvalid(t *testing.T) {
 
 func TestGetSort(t *testing.T) {
 	var s []string
-	v := schema.Schema{"f": schema.Field{Sortable: true}}
+	v := schema.Schema{"id": schema.IDField, "f": schema.Field{Sortable: true}}
 	s = callGetSort("", v)
+	assert.Equal(t, []string{"_id"}, s)
+	s = callGetSort("id", v)
 	assert.Equal(t, []string{"_id"}, s)
 	s = callGetSort("f", v)
 	assert.Equal(t, []string{"_payload.f"}, s)
