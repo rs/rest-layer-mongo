@@ -61,6 +61,7 @@ func (m *Handler) c(ctx context.Context) (*mgo.Collection, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// With mgo, session.Copy() pulls a connection from the connection pool
 	s := m.session.Copy()
 	// Ensure safe mode is enabled in order to get errors
 	s.EnsureSafe(&mgo.Safe{})
