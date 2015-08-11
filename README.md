@@ -1,4 +1,6 @@
-# REST Layer MongoDB backend [![godoc](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](https://godoc.org/github.com/rs/rest-layer-mongo) [![license](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://raw.githubusercontent.com/rs/rest-layer-mongo/master/LICENSE) [![build](https://img.shields.io/travis/rs/rest-layer-mongo.svg?style=flat)](https://travis-ci.org/rs/rest-layer-mongo)
+# REST Layer MongoDB backend
+
+[![godoc](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](https://godoc.org/github.com/rs/rest-layer-mongo) [![license](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://raw.githubusercontent.com/rs/rest-layer-mongo/master/LICENSE) [![build](https://img.shields.io/travis/rs/rest-layer-mongo.svg?style=flat)](https://travis-ci.org/rs/rest-layer-mongo)
 
 This REST Layer resource storage backend stores data in a MongoDB cluster using [mgo](https://godoc.org/labix.org/v2/mgo).
 
