@@ -29,3 +29,11 @@ index.Bind("foo", resource.NewResource(foo, s, resource.DefaultConf)
 ```
 
 You may want to create a many mongo handlers as you have resources as long as you want each resources in a different collection. You can share the same `mgo` session across all you handlers.
+
+### Object ID
+
+This package also provides a REST Layer [schema.Validator](https://godoc.org/github.com/rs/rest-layer/schema#Validator) for MongoDB ObjectIDs. This validator ensures proper binary serialization of the Object ID in the database for space efficiency.
+
+You may reference this validator using [mongo.ObjectID](https://godoc.org/github.com/rs/rest-layer-mongo#ObjectID) as [schema.Field](https://godoc.org/github.com/rs/rest-layer/schema#Field).
+
+A `mongo.NewObjectID` field hook and `mongo.ObjectIDField` helper are also provided.
