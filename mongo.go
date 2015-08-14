@@ -188,7 +188,11 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPa
 	}
 	defer m.close(c)
 	var mItem mongoItem
-	iter := c.Find(q).Sort(s...).Skip((page - 1) * perPage).Limit(perPage).Iter()
+	query := c.Find(q).Sort(s...)
+	if perPage >= 0 {
+		query = query.Skip((page - 1) * perPage).Limit(perPage)
+	}
+	iter := query.Iter()
 	// Total is set to -1 because we have no easy way with Mongodb to to compute this value
 	// without performing two requests.
 	list := &resource.ItemList{Page: page, Total: -1, Items: []*resource.Item{}}
