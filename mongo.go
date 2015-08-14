@@ -2,7 +2,6 @@
 package mongo
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/rs/rest-layer/resource"
@@ -179,7 +178,6 @@ func (m *Handler) Clear(ctx context.Context, lookup *resource.Lookup) (int, erro
 // Find items from the mongo collection matching the provided lookup
 func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPage int) (*resource.ItemList, error) {
 	q, err := getQuery(lookup)
-	fmt.Printf("%#v\n", q)
 	if err != nil {
 		return nil, err
 	}
