@@ -6,19 +6,14 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-// prefix is the string to add before all query/sort fields in order to
-// match the mongo document structure (payload is in a sub dict)
-var prefix = "_payload."
-
 // getField translate a schema field into a MongoDB field:
 //
-//  - prefixed with _payload.
-//  - id -> _id with no prefix in order to tape on the mongo primary key
+//  - id -> _id with in order to tape on the mongo primary key
 func getField(f string) string {
 	if f == "id" {
 		return "_id"
 	}
-	return prefix + f
+	return f
 }
 
 // getQuery transform a resource.Lookup into a Mongo query

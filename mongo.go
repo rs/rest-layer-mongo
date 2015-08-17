@@ -22,7 +22,7 @@ type mongoItem struct {
 	ID      interface{}            `bson:"_id"`
 	ETag    string                 `bson:"_etag"`
 	Updated time.Time              `bson:"_updated"`
-	Payload map[string]interface{} `bson:"_payload"`
+	Payload map[string]interface{} `bson:",inline"`
 }
 
 // NewHandler creates an new mongo handler
@@ -36,16 +36,25 @@ func NewHandler(s *mgo.Session, db, collection string) *Handler {
 
 // newMongoItem converts a resource.Item into a mongoItem
 func newMongoItem(i *resource.Item) *mongoItem {
+	// Filter out id from the payload so we don't store it twice
+	p := map[string]interface{}{}
+	for k, v := range i.Payload {
+		if k != "id" {
+			p[k] = v
+		}
+	}
 	return &mongoItem{
 		ID:      i.ID,
 		ETag:    i.ETag,
 		Updated: i.Updated,
-		Payload: i.Payload,
+		Payload: p,
 	}
 }
 
 // newItem converts a back mongoItem into a resource.Item
 func newItem(i *mongoItem) *resource.Item {
+	// Add the id back (we use the same map hoping the mongoItem won't be stored back)
+	i.Payload["id"] = i.ID
 	return &resource.Item{
 		ID:      i.ID,
 		ETag:    i.ETag,
