@@ -199,8 +199,17 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPa
 	var mItem mongoItem
 	query := c.Find(q).Sort(s...)
 	if perPage >= 0 {
-		query = query.Skip((page - 1) * perPage).Limit(perPage)
+		query.Skip((page - 1) * perPage).Limit(perPage)
 	}
+	// Apply context deadline if any
+	if dl, ok := ctx.Deadline(); ok {
+		dur := dl.Sub(time.Now())
+		if dur < 0 {
+			dur = 0
+		}
+		query.SetMaxTime(dur)
+	}
+	// Perform request
 	iter := query.Iter()
 	// Total is set to -1 because we have no easy way with Mongodb to to compute this value
 	// without performing two requests.
