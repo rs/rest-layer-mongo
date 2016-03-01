@@ -27,6 +27,7 @@ type mongoItem struct {
 
 // NewHandler creates an new mongo handler
 func NewHandler(s *mgo.Session, db, collection string) *Handler {
+	s.EnsureSafe(&mgo.Safe{})
 	return &Handler{
 		session: s,
 		dbName:  db,
@@ -130,10 +131,11 @@ func (m *Handler) Update(ctx context.Context, item *resource.Item, original *res
 		} else if count == 0 {
 			err = resource.ErrNotFound
 		} else if ctx.Err() != nil {
-			return ctx.Err()
+			err = ctx.Err()
+		} else {
+			// If the item were found, it means that its etag didn't match
+			err = resource.ErrConflict
 		}
-		// If the item were found, it means that its etag didn't match
-		err = resource.ErrConflict
 	}
 	return err
 }
@@ -155,10 +157,11 @@ func (m *Handler) Delete(ctx context.Context, item *resource.Item) error {
 		} else if count == 0 {
 			err = resource.ErrNotFound
 		} else if ctx.Err() != nil {
-			return ctx.Err()
+			err = ctx.Err()
+		} else {
+			// If the item were found, it means that its etag didn't match
+			err = resource.ErrConflict
 		}
-		// If the item were found, it means that its etag didn't match
-		err = resource.ErrConflict
 	}
 	return err
 }
