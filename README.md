@@ -25,7 +25,7 @@ s := mongo.NewHandler(session, "the_db", "the_collection")
 Use this handler with a resource:
 
 ```go
-index.Bind("foo", resource.NewResource(foo, s, resource.DefaultConf)
+index.Bind("foo", foo, s, resource.DefaultConf)
 ```
 
 You may want to create a many mongo handlers as you have resources as long as you want each resources in a different collection. You can share the same `mgo` session across all you handlers.
