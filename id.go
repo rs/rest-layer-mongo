@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 
+	"golang.org/x/net/context"
+
 	"github.com/rs/rest-layer/schema"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -11,7 +13,7 @@ import (
 var (
 	// NewObjectID is a field hook handler that generates a new Mongo ObjectID hex if
 	// value is nil to be used in schema with OnInit.
-	NewObjectID = func(value interface{}) interface{} {
+	NewObjectID = func(ctx context.Context, value interface{}) interface{} {
 		if value == nil {
 			value = bson.NewObjectId().Hex()
 		}

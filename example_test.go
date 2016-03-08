@@ -14,46 +14,52 @@ import (
 
 var (
 	user = schema.Schema{
-		"id":      schema.IDField,
-		"created": schema.CreatedField,
-		"updated": schema.UpdatedField,
-		"name": schema.Field{
-			Required:   true,
-			Filterable: true,
-			Sortable:   true,
-			Validator: &schema.String{
-				MaxLen: 150,
+		Fields: schema.Fields{
+			"id":      schema.IDField,
+			"created": schema.CreatedField,
+			"updated": schema.UpdatedField,
+			"name": {
+				Required:   true,
+				Filterable: true,
+				Sortable:   true,
+				Validator: &schema.String{
+					MaxLen: 150,
+				},
 			},
 		},
 	}
 
 	// Define a post resource schema
 	post = schema.Schema{
-		"id":      schema.IDField,
-		"created": schema.CreatedField,
-		"updated": schema.UpdatedField,
-		"user": schema.Field{
-			Required:   true,
-			Filterable: true,
-			Validator: &schema.Reference{
-				Path: "users",
-			},
-		},
-		"public": schema.Field{
-			Filterable: true,
-			Validator:  &schema.Bool{},
-		},
-		"meta": schema.Field{
-			Schema: &schema.Schema{
-				"title": schema.Field{
-					Required: true,
-					Validator: &schema.String{
-						MaxLen: 150,
-					},
+		Fields: schema.Fields{
+			"id":      schema.IDField,
+			"created": schema.CreatedField,
+			"updated": schema.UpdatedField,
+			"user": {
+				Required:   true,
+				Filterable: true,
+				Validator: &schema.Reference{
+					Path: "users",
 				},
-				"body": schema.Field{
-					Validator: &schema.String{
-						MaxLen: 100000,
+			},
+			"public": {
+				Filterable: true,
+				Validator:  &schema.Bool{},
+			},
+			"meta": {
+				Schema: &schema.Schema{
+					Fields: schema.Fields{
+						"title": {
+							Required: true,
+							Validator: &schema.String{
+								MaxLen: 150,
+							},
+						},
+						"body": {
+							Validator: &schema.String{
+								MaxLen: 100000,
+							},
+						},
 					},
 				},
 			},
@@ -70,13 +76,13 @@ func Example() {
 
 	index := resource.NewIndex()
 
-	users := index.Bind("users", resource.New(user, mongo.NewHandler(session, db, "users"), resource.Conf{
+	users := index.Bind("users", user, mongo.NewHandler(session, db, "users"), resource.Conf{
 		AllowedModes: resource.ReadWrite,
-	}))
+	})
 
-	users.Bind("posts", "user", resource.New(post, mongo.NewHandler(session, db, "posts"), resource.Conf{
+	users.Bind("posts", "user", post, mongo.NewHandler(session, db, "posts"), resource.Conf{
 		AllowedModes: resource.ReadWrite,
-	}))
+	})
 
 	api, err := rest.NewHandler(index)
 	if err != nil {
