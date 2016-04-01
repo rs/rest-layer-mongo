@@ -25,7 +25,7 @@ var (
 	ObjectIDField = schema.Field{
 		Required:   true,
 		ReadOnly:   true,
-		OnInit:     &NewObjectID,
+		OnInit:     NewObjectID,
 		Filterable: true,
 		Sortable:   true,
 		Validator:  &ObjectID{},
