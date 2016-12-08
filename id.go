@@ -1,10 +1,9 @@
 package mongo
 
 import (
+	"context"
 	"errors"
 	"fmt"
-
-	"golang.org/x/net/context"
 
 	"github.com/rs/rest-layer/schema"
 	"gopkg.in/mgo.v2/bson"
