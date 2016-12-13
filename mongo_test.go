@@ -1,16 +1,14 @@
 package mongo
 
 import (
+	"context"
 	"testing"
 	"time"
-
-	"gopkg.in/mgo.v2"
-
-	"golang.org/x/net/context"
 
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema"
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/mgo.v2"
 )
 
 // Mongo doesn't support nanoseconds

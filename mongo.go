@@ -2,10 +2,10 @@
 package mongo
 
 import (
+	"context"
 	"time"
 
 	"github.com/rs/rest-layer/resource"
-	"golang.org/x/net/context"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
