@@ -204,16 +204,6 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPa
 
 	// Perform request the first time (to get total number of results without any filter applied)
 	iter := query.Iter()
-	tmp := &resource.ItemList{Page: page, Offset: skip, Total: 0, Items: []*resource.Item{}}
-	for iter.Next(&mItem) {
-		// Check if context is still ok before to continue
-		if err = ctx.Err(); err != nil {
-			// TODO bench this as net/context is using mutex under the hood
-			iter.Close()
-			return nil, err
-		}
-		tmp.Items = append(tmp.Items, newItem(&mItem))
-	}
 
 	if perPage >= 0 {
 		query.Skip((page - 1) * perPage).Limit(perPage)
@@ -241,8 +231,6 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPa
 		}
 		list.Items = append(list.Items, newItem(&mItem))
 	}
-	list.Results = len(list.Items)
-	list.Total = len(tmp.Items)
 	if err := iter.Close(); err != nil {
 		return nil, err
 	}
