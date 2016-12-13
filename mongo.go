@@ -188,7 +188,7 @@ func (m *Handler) Clear(ctx context.Context, lookup *resource.Lookup) (int, erro
 }
 
 // Find items from the mongo collection matching the provided lookup
-func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPage int) (*resource.ItemList, error) {
+func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPage int, skip int) (*resource.ItemList, error) {
 	q, err := getQuery(lookup)
 	if err != nil {
 		return nil, err
@@ -201,8 +201,25 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPa
 	defer m.close(c)
 	var mItem mongoItem
 	query := c.Find(q).Sort(s...)
+
+	// Perform request the first time (to get total number of results without any filter applied)
+	iter := query.Iter()
+	tmp := &resource.ItemList{Page: page, Offset: skip, Total: 0, Items: []*resource.Item{}}
+	for iter.Next(&mItem) {
+		// Check if context is still ok before to continue
+		if err = ctx.Err(); err != nil {
+			// TODO bench this as net/context is using mutex under the hood
+			iter.Close()
+			return nil, err
+		}
+		tmp.Items = append(tmp.Items, newItem(&mItem))
+	}
+
 	if perPage >= 0 {
 		query.Skip((page - 1) * perPage).Limit(perPage)
+	}
+	if skip >= 0 {
+		query.Skip(skip)
 	}
 	// Apply context deadline if any
 	if dl, ok := ctx.Deadline(); ok {
@@ -213,10 +230,8 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPa
 		query.SetMaxTime(dur)
 	}
 	// Perform request
-	iter := query.Iter()
-	// Total is set to -1 because we have no easy way with Mongodb to to compute this value
-	// without performing two requests.
-	list := &resource.ItemList{Page: page, Total: -1, Items: []*resource.Item{}}
+	iter = query.Iter()
+	list := &resource.ItemList{Page: page, Offset: skip, Total: -1, Items: []*resource.Item{}}
 	for iter.Next(&mItem) {
 		// Check if context is still ok before to continue
 		if err = ctx.Err(); err != nil {
@@ -226,6 +241,8 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPa
 		}
 		list.Items = append(list.Items, newItem(&mItem))
 	}
+	list.Results = len(list.Items)
+	list.Total = len(tmp.Items)
 	if err := iter.Close(); err != nil {
 		return nil, err
 	}
