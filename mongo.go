@@ -188,7 +188,7 @@ func (m *Handler) Clear(ctx context.Context, lookup *resource.Lookup) (int, erro
 }
 
 // Find items from the mongo collection matching the provided lookup
-func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPage int, skip int) (*resource.ItemList, error) {
+func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPage int, offset int) (*resource.ItemList, error) {
 	q, err := getQuery(lookup)
 	if err != nil {
 		return nil, err
@@ -208,8 +208,8 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPa
 	if perPage >= 0 {
 		query.Skip((page - 1) * perPage).Limit(perPage)
 	}
-	if skip >= 0 {
-		query.Skip(skip)
+	if offset >= 0 {
+		query.Skip(offset)
 	}
 	// Apply context deadline if any
 	if dl, ok := ctx.Deadline(); ok {
@@ -221,7 +221,7 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPa
 	}
 	// Perform request
 	iter = query.Iter()
-	list := &resource.ItemList{Page: page, Offset: skip, Total: -1, Items: []*resource.Item{}}
+	list := &resource.ItemList{Page: page, Offset: offset, Total: -1, Items: []*resource.Item{}}
 	for iter.Next(&mItem) {
 		// Check if context is still ok before to continue
 		if err = ctx.Err(); err != nil {
