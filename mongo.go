@@ -202,9 +202,6 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPa
 	var mItem mongoItem
 	query := c.Find(q).Sort(s...)
 
-	// Perform request the first time (to get total number of results without any filter applied)
-	iter := query.Iter()
-
 	if perPage >= 0 {
 		query.Skip((page - 1) * perPage).Limit(perPage)
 	}
@@ -220,7 +217,9 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, page, perPa
 		query.SetMaxTime(dur)
 	}
 	// Perform request
-	iter = query.Iter()
+	iter := query.Iter()
+	// Total is set to -1 because we have no easy way with Mongodb to to compute this value
+	// without performing two requests.
 	list := &resource.ItemList{Page: page, Offset: offset, Total: -1, Items: []*resource.Item{}}
 	for iter.Next(&mItem) {
 		// Check if context is still ok before to continue
