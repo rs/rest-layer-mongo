@@ -218,9 +218,9 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, offset, lim
 	}
 	// Perform request
 	iter := query.Iter()
-	// Total is set to -1 because we have no easy way with Mongodb to to compute this value
+	// Total is set to -1 because we have no easy way with Mongodb to compute this value
 	// without performing two requests.
-	list := &resource.ItemList{Page: offset, Total: -1, Items: []*resource.Item{}}
+	list := &resource.ItemList{Page: offset, Skip: offset, Total: -1, Items: []*resource.Item{}}
 	for iter.Next(&mItem) {
 		// Check if context is still ok before to continue
 		if err = ctx.Err(); err != nil {
@@ -230,6 +230,8 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, offset, lim
 		}
 		list.Items = append(list.Items, newItem(&mItem))
 	}
+	// Now we can set Total.
+	list.Total = len(list.Items)
 	if err := iter.Close(); err != nil {
 		return nil, err
 	}
