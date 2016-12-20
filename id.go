@@ -48,3 +48,12 @@ func (v ObjectID) Validate(value interface{}) (interface{}, error) {
 	}
 	return bson.ObjectIdHex(s), nil
 }
+
+// Serialize implements FieldSerializer interface
+func (v ObjectID) Serialize(value interface{}) (interface{}, error) {
+	id, ok := value.(bson.ObjectId)
+	if !ok {
+		return nil, errors.New("not an ObjectId")
+	}
+	return id.Hex(), nil
+}
