@@ -196,9 +196,8 @@ func TestFind(t *testing.T) {
 	assert.NoError(t, h2.Insert(ctx, items))
 
 	lookup := resource.NewLookup()
-	l, err := h.Find(ctx, lookup, 1, -1)
+	l, err := h.Find(ctx, lookup, 0, -1)
 	if assert.NoError(t, err) {
-		assert.Equal(t, 1, l.Page)
 		assert.Equal(t, -1, l.Total) // Mongo doesn't support total counting
 		assert.Len(t, l.Items, 4)
 		// Do not check result's content as its order is unpredictable
@@ -207,9 +206,8 @@ func TestFind(t *testing.T) {
 	lookup = resource.NewLookupWithQuery(schema.Query{
 		schema.Equal{Field: "name", Value: "c"},
 	})
-	l, err = h.Find(ctx, lookup, 1, 100)
+	l, err = h.Find(ctx, lookup, 0, 100)
 	if assert.NoError(t, err) {
-		assert.Equal(t, 1, l.Page)
 		assert.Equal(t, -1, l.Total) // Mongo doesn't support total counting
 		if assert.Len(t, l.Items, 1) {
 			item := l.Items[0]
@@ -222,9 +220,8 @@ func TestFind(t *testing.T) {
 		schema.In{Field: "name", Values: []schema.Value{"c", "d"}},
 	})
 	lookup.SetSorts([]string{"name"})
-	l, err = h.Find(ctx, lookup, 1, 100)
+	l, err = h.Find(ctx, lookup, 0, 100)
 	if assert.NoError(t, err) {
-		assert.Equal(t, 1, l.Page)
 		assert.Equal(t, -1, l.Total) // Mongo doesn't support total counting
 		if assert.Len(t, l.Items, 2) {
 			item := l.Items[0]
@@ -239,9 +236,8 @@ func TestFind(t *testing.T) {
 	lookup = resource.NewLookupWithQuery(schema.Query{
 		schema.Equal{Field: "id", Value: "3"},
 	})
-	l, err = h.Find(ctx, lookup, 1, 1)
+	l, err = h.Find(ctx, lookup, 0, 1)
 	if assert.NoError(t, err) {
-		assert.Equal(t, 1, l.Page)
 		assert.Equal(t, -1, l.Total) // Mongo doesn't support total counting
 		if assert.Len(t, l.Items, 1) {
 			item := l.Items[0]
@@ -253,9 +249,8 @@ func TestFind(t *testing.T) {
 	lookup = resource.NewLookupWithQuery(schema.Query{
 		schema.Equal{Field: "id", Value: "10"},
 	})
-	l, err = h.Find(ctx, lookup, 1, 1)
+	l, err = h.Find(ctx, lookup, 0, 1)
 	if assert.NoError(t, err) {
-		assert.Equal(t, 1, l.Page)
 		assert.Equal(t, -1, l.Total) // Mongo doesn't support total counting
 		assert.Len(t, l.Items, 0)
 	}
@@ -263,9 +258,8 @@ func TestFind(t *testing.T) {
 	lookup = resource.NewLookupWithQuery(schema.Query{
 		schema.In{Field: "id", Values: []schema.Value{"3", "4", "10"}},
 	})
-	l, err = h.Find(ctx, lookup, 1, -1)
+	l, err = h.Find(ctx, lookup, 0, -1)
 	if assert.NoError(t, err) {
-		assert.Equal(t, 1, l.Page)
 		assert.Equal(t, -1, l.Total) // Mongo doesn't support total counting
 		assert.Len(t, l.Items, 2)
 	}
