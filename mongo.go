@@ -233,5 +233,33 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, offset, lim
 	if err := iter.Close(); err != nil {
 		return nil, err
 	}
+	// If the number of returned elements is lower than requested limit, or not
+	// limit is requested, we can deduce the total number of element for free.
+	if limit == -1 || len(list.Items) < limit {
+		list.Total = offset + len(list.Items)
+	}
 	return list, err
+}
+
+// Count counts the number items matching the lookup filter
+func (m *Handler) Count(ctx context.Context, lookup *resource.Lookup) (int, error) {
+	q, err := getQuery(lookup)
+	if err != nil {
+		return -1, err
+	}
+	c, err := m.c(ctx)
+	if err != nil {
+		return -1, err
+	}
+	defer m.close(c)
+	query := c.Find(q)
+	// Apply context deadline if any
+	if dl, ok := ctx.Deadline(); ok {
+		dur := dl.Sub(time.Now())
+		if dur < 0 {
+			dur = 0
+		}
+		query.SetMaxTime(dur)
+	}
+	return query.Count()
 }

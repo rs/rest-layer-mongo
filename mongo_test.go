@@ -198,7 +198,7 @@ func TestFind(t *testing.T) {
 	lookup := resource.NewLookup()
 	l, err := h.Find(ctx, lookup, 0, -1)
 	if assert.NoError(t, err) {
-		assert.Equal(t, -1, l.Total) // Mongo doesn't support total counting
+		assert.Equal(t, 4, l.Total)
 		assert.Len(t, l.Items, 4)
 		// Do not check result's content as its order is unpredictable
 	}
@@ -206,9 +206,9 @@ func TestFind(t *testing.T) {
 	lookup = resource.NewLookupWithQuery(schema.Query{
 		schema.Equal{Field: "name", Value: "c"},
 	})
-	l, err = h.Find(ctx, lookup, 0, 100)
+	l, err = h.Find(ctx, lookup, 0, 1)
 	if assert.NoError(t, err) {
-		assert.Equal(t, -1, l.Total) // Mongo doesn't support total counting
+		assert.Equal(t, -1, l.Total)
 		if assert.Len(t, l.Items, 1) {
 			item := l.Items[0]
 			assert.Equal(t, "3", item.ID)
@@ -222,7 +222,7 @@ func TestFind(t *testing.T) {
 	lookup.SetSorts([]string{"name"})
 	l, err = h.Find(ctx, lookup, 0, 100)
 	if assert.NoError(t, err) {
-		assert.Equal(t, -1, l.Total) // Mongo doesn't support total counting
+		assert.Equal(t, 2, l.Total)
 		if assert.Len(t, l.Items, 2) {
 			item := l.Items[0]
 			assert.Equal(t, "3", item.ID)
@@ -238,7 +238,7 @@ func TestFind(t *testing.T) {
 	})
 	l, err = h.Find(ctx, lookup, 0, 1)
 	if assert.NoError(t, err) {
-		assert.Equal(t, -1, l.Total) // Mongo doesn't support total counting
+		assert.Equal(t, -1, l.Total)
 		if assert.Len(t, l.Items, 1) {
 			item := l.Items[0]
 			assert.Equal(t, "3", item.ID)
@@ -251,7 +251,7 @@ func TestFind(t *testing.T) {
 	})
 	l, err = h.Find(ctx, lookup, 0, 1)
 	if assert.NoError(t, err) {
-		assert.Equal(t, -1, l.Total) // Mongo doesn't support total counting
+		assert.Equal(t, 0, l.Total)
 		assert.Len(t, l.Items, 0)
 	}
 
@@ -260,7 +260,7 @@ func TestFind(t *testing.T) {
 	})
 	l, err = h.Find(ctx, lookup, 0, -1)
 	if assert.NoError(t, err) {
-		assert.Equal(t, -1, l.Total) // Mongo doesn't support total counting
+		assert.Equal(t, 2, l.Total)
 		assert.Len(t, l.Items, 2)
 	}
 }
