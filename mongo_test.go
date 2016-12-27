@@ -190,6 +190,7 @@ func TestFind(t *testing.T) {
 		{ID: "2", Payload: map[string]interface{}{"id": "2", "name": "b", "age": 2}},
 		{ID: "3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
 		{ID: "4", Payload: map[string]interface{}{"id": "4", "name": "d", "age": 4}},
+		{ID: "5", Payload: map[string]interface{}{"id": "5", "name": "rest-layer-regexp"}},
 	}
 	ctx := context.Background()
 	assert.NoError(t, h.Insert(ctx, items))
@@ -198,8 +199,8 @@ func TestFind(t *testing.T) {
 	lookup := resource.NewLookup()
 	l, err := h.Find(ctx, lookup, 0, -1)
 	if assert.NoError(t, err) {
-		assert.Equal(t, 4, l.Total)
-		assert.Len(t, l.Items, 4)
+		assert.Equal(t, 5, l.Total)
+		assert.Len(t, l.Items, 5)
 		// Do not check result's content as its order is unpredictable
 	}
 
@@ -243,6 +244,19 @@ func TestFind(t *testing.T) {
 			item := l.Items[0]
 			assert.Equal(t, "3", item.ID)
 			assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
+		}
+	}
+
+	lookup = resource.NewLookupWithQuery(schema.Query{
+		schema.Regex{Field: "name", Value: "^re[s]{1}t-.+yer.+exp$"},
+	})
+	l, err = h.Find(ctx, lookup, 0, 1)
+	if assert.NoError(t, err) {
+		assert.Equal(t, -1, l.Total)
+		if assert.Len(t, l.Items, 1) {
+			item := l.Items[0]
+			assert.Equal(t, "5", item.ID)
+			assert.Equal(t, map[string]interface{}{"id": "5", "name": "rest-layer-regexp"}, item.Payload)
 		}
 	}
 
