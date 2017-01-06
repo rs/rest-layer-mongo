@@ -3,6 +3,8 @@ package mongo
 import (
 	"testing"
 
+	"regexp"
+
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema"
 	"github.com/stretchr/testify/assert"
@@ -57,6 +59,11 @@ func TestGetQuery(t *testing.T) {
 	b, err = callGetQuery(schema.Query{schema.NotIn{Field: "f", Values: []schema.Value{"foo", "bar"}}})
 	assert.NoError(t, err)
 	assert.Equal(t, bson.M{"f": bson.M{"$nin": []interface{}{"foo", "bar"}}}, b)
+	if v, err := regexp.Compile("fo[o]{1}.+is.+some"); err == nil {
+		b, err = callGetQuery(schema.Query{schema.Regex{Field: "f", Value: v}})
+	}
+	assert.NoError(t, err)
+	assert.Equal(t, bson.M{"f": bson.M{"$regex": "fo[o]{1}.+is.+some"}}, b)
 	b, err = callGetQuery(schema.Query{schema.And{schema.Equal{Field: "f", Value: "foo"}, schema.Equal{Field: "f", Value: "bar"}}})
 	assert.NoError(t, err)
 	assert.Equal(t, bson.M{"$and": []bson.M{bson.M{"f": "foo"}, bson.M{"f": "bar"}}}, b)

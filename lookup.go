@@ -79,6 +79,8 @@ func translateQuery(q schema.Query) (bson.M, error) {
 			b[getField(t.Field)] = bson.M{"$lt": t.Value}
 		case schema.LowerOrEqual:
 			b[getField(t.Field)] = bson.M{"$lte": t.Value}
+		case schema.Regex:
+			b[getField(t.Field)] = bson.M{"$regex": t.Value.String()}
 		default:
 			return nil, resource.ErrNotImplemented
 		}
