@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"regexp"
+
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema"
 	"github.com/stretchr/testify/assert"
@@ -247,9 +249,11 @@ func TestFind(t *testing.T) {
 		}
 	}
 
-	lookup = resource.NewLookupWithQuery(schema.Query{
-		schema.Regex{Field: "name", Value: "^re[s]{1}t-.+yer.+exp$"},
-	})
+	if v, err := regexp.Compile("^re[s]{1}t-.+yer.+exp$"); err == nil {
+		lookup = resource.NewLookupWithQuery(schema.Query{
+			schema.Regex{Field: "name", Value: v},
+		})
+	}
 	l, err = h.Find(ctx, lookup, 0, 1)
 	if assert.NoError(t, err) {
 		assert.Equal(t, -1, l.Total)
