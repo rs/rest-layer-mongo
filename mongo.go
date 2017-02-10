@@ -10,6 +10,11 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+type key int
+
+// Hkey is now a global exported key so other packages can used this for setting ctx values.
+var Hkey key = 1
+
 // mongoItem is a bson representation of a resource.Item
 type mongoItem struct {
 	ID      interface{}            `bson:"_id"`
@@ -54,26 +59,41 @@ type Handler func(ctx context.Context) (*mgo.Collection, error)
 func NewHandler(s *mgo.Session, db, collection string) Handler {
 	s.EnsureSafe(&mgo.Safe{})
 	return func(ctx context.Context) (*mgo.Collection, error) {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		// Ensure safe mode is enabled in order to get errors
-		s.EnsureSafe(&mgo.Safe{})
-		// Set a timeout to match the context deadline if any
-		if deadline, ok := ctx.Deadline(); ok {
-			timeout := deadline.Sub(time.Now())
-			if timeout <= 0 {
-				timeout = 0
-			}
-			s.SetSocketTimeout(timeout)
-			s.SetSyncTimeout(timeout)
-		}
-		if ctxdb, ok := ctx.Value("dbname").(string); ok && ctxdb != "" {
-			db = ctxdb
-		}
 		// With mgo, session.Copy() pulls a connection from the connection pool
 		return s.Copy().DB(db).C(collection), nil
 	}
+}
+
+// C returns the mongo collection managed by this storage handler
+// from a Copy() of the mgo session.
+func (m Handler) c(ctx context.Context) (*mgo.Collection, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	c, err := m(ctx)
+	if err != nil {
+		return nil, err
+	}
+	db := c.Database.Name
+
+	if ctxdbname, ok := ctx.Value(Hkey).(string); ok && ctxdbname != "" {
+		db = ctxdbname
+	}
+
+	// With mgo, session.Copy() pulls a connection from the connection pool
+	s := c.Database.Session.Copy()
+	// Ensure safe mode is enabled in order to get errors
+	s.EnsureSafe(&mgo.Safe{})
+	// Set a timeout to match the context deadline if any
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout := deadline.Sub(time.Now())
+		if timeout <= 0 {
+			timeout = 0
+		}
+		s.SetSocketTimeout(timeout)
+		s.SetSyncTimeout(timeout)
+	}
+	return s.DB(db).C(c.Name), nil
 }
 
 // close returns a mgo.Collection's session to the connection pool.
@@ -87,7 +107,7 @@ func (m Handler) Insert(ctx context.Context, items []*resource.Item) error {
 	for i, item := range items {
 		mItems[i] = newMongoItem(item)
 	}
-	c, err := m(ctx)
+	c, err := m.c(ctx)
 	if err != nil {
 		return err
 	}
@@ -106,7 +126,7 @@ func (m Handler) Insert(ctx context.Context, items []*resource.Item) error {
 // Update replace an item by a new one in the mongo collection
 func (m Handler) Update(ctx context.Context, item *resource.Item, original *resource.Item) error {
 	mItem := newMongoItem(item)
-	c, err := m(ctx)
+	c, err := m.c(ctx)
 	if err != nil {
 		return err
 	}
@@ -132,7 +152,7 @@ func (m Handler) Update(ctx context.Context, item *resource.Item, original *reso
 
 // Delete deletes an item from the mongo collection
 func (m Handler) Delete(ctx context.Context, item *resource.Item) error {
-	c, err := m(ctx)
+	c, err := m.c(ctx)
 	if err != nil {
 		return err
 	}
@@ -162,7 +182,7 @@ func (m Handler) Clear(ctx context.Context, lookup *resource.Lookup) (int, error
 	if err != nil {
 		return 0, err
 	}
-	c, err := m(ctx)
+	c, err := m.c(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -184,7 +204,7 @@ func (m Handler) Find(ctx context.Context, lookup *resource.Lookup, offset, limi
 		return nil, err
 	}
 	s := getSort(lookup)
-	c, err := m(ctx)
+	c, err := m.c(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +257,7 @@ func (m Handler) Count(ctx context.Context, lookup *resource.Lookup) (int, error
 	if err != nil {
 		return -1, err
 	}
-	c, err := m(ctx)
+	c, err := m.c(ctx)
 	if err != nil {
 		return -1, err
 	}
