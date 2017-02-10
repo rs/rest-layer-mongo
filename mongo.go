@@ -74,11 +74,6 @@ func (m Handler) c(ctx context.Context) (*mgo.Collection, error) {
 	if err != nil {
 		return nil, err
 	}
-	db := c.Database.Name
-
-	if ctxdbname, ok := ctx.Value(Hkey).(string); ok && ctxdbname != "" {
-		db = ctxdbname
-	}
 
 	// With mgo, session.Copy() pulls a connection from the connection pool
 	s := c.Database.Session.Copy()
@@ -93,7 +88,7 @@ func (m Handler) c(ctx context.Context) (*mgo.Collection, error) {
 		s.SetSocketTimeout(timeout)
 		s.SetSyncTimeout(timeout)
 	}
-	return s.DB(db).C(c.Name), nil
+	return s.DB(c.Database.Name).C(c.Name), nil
 }
 
 // close returns a mgo.Collection's session to the connection pool.
