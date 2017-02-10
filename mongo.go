@@ -59,7 +59,6 @@ type Handler func(ctx context.Context) (*mgo.Collection, error)
 func NewHandler(s *mgo.Session, db, collection string) Handler {
 	s.EnsureSafe(&mgo.Safe{})
 	return func(ctx context.Context) (*mgo.Collection, error) {
-		// With mgo, session.Copy() pulls a connection from the connection pool
 		return s.DB(db).C(collection), nil
 	}
 }
