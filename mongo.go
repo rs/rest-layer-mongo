@@ -10,11 +10,6 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-type key int
-
-// Hkey is now a global exported key so other packages can used this for setting ctx values.
-var Hkey key = 1
-
 // mongoItem is a bson representation of a resource.Item
 type mongoItem struct {
 	ID      interface{}            `bson:"_id"`
@@ -57,8 +52,9 @@ type Handler func(ctx context.Context) (*mgo.Collection, error)
 
 // NewHandler creates an new mongo handler
 func NewHandler(s *mgo.Session, db, collection string) Handler {
-	s.EnsureSafe(&mgo.Safe{})
 	return func(ctx context.Context) (*mgo.Collection, error) {
+		// With mgo, session.Copy() pulls a connection from the connection pool
+		s := s.Copy()
 		return s.DB(db).C(collection), nil
 	}
 }
@@ -73,21 +69,18 @@ func (m Handler) c(ctx context.Context) (*mgo.Collection, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// With mgo, session.Copy() pulls a connection from the connection pool
-	s := c.Database.Session.Copy()
 	// Ensure safe mode is enabled in order to get errors
-	s.EnsureSafe(&mgo.Safe{})
+	c.Database.Session.EnsureSafe(&mgo.Safe{})
 	// Set a timeout to match the context deadline if any
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := deadline.Sub(time.Now())
 		if timeout <= 0 {
 			timeout = 0
 		}
-		s.SetSocketTimeout(timeout)
-		s.SetSyncTimeout(timeout)
+		c.Database.Session.SetSocketTimeout(timeout)
+		c.Database.Session.SetSyncTimeout(timeout)
 	}
-	return s.DB(c.Database.Name).C(c.Name), nil
+	return c, nil
 }
 
 // close returns a mgo.Collection's session to the connection pool.
