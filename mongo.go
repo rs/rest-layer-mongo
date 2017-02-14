@@ -54,7 +54,6 @@ type Handler func(ctx context.Context) (*mgo.Collection, error)
 func NewHandler(s *mgo.Session, db, collection string) Handler {
 	return func(ctx context.Context) (*mgo.Collection, error) {
 		// With mgo, session.Copy() pulls a connection from the connection pool
-		s := s.Copy()
 		return s.DB(db).C(collection), nil
 	}
 }
@@ -70,7 +69,7 @@ func (m Handler) c(ctx context.Context) (*mgo.Collection, error) {
 		return nil, err
 	}
 	// Ensure safe mode is enabled in order to get errors
-	c.Database.Session.EnsureSafe(&mgo.Safe{})
+	c.Database.Session.Copy().EnsureSafe(&mgo.Safe{})
 	// Set a timeout to match the context deadline if any
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := deadline.Sub(time.Now())
