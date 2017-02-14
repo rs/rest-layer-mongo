@@ -53,7 +53,6 @@ type Handler func(ctx context.Context) (*mgo.Collection, error)
 // NewHandler creates an new mongo handler
 func NewHandler(s *mgo.Session, db, collection string) Handler {
 	return func(ctx context.Context) (*mgo.Collection, error) {
-		// With mgo, session.Copy() pulls a connection from the connection pool
 		return s.DB(db).C(collection), nil
 	}
 }
@@ -68,17 +67,20 @@ func (m Handler) c(ctx context.Context) (*mgo.Collection, error) {
 	if err != nil {
 		return nil, err
 	}
+	// With mgo, session.Copy() pulls a connection from the connection pool
+	s := c.Database.Session.Copy()
 	// Ensure safe mode is enabled in order to get errors
-	c.Database.Session.Copy().EnsureSafe(&mgo.Safe{})
+	s.EnsureSafe(&mgo.Safe{})
 	// Set a timeout to match the context deadline if any
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout := deadline.Sub(time.Now())
 		if timeout <= 0 {
 			timeout = 0
 		}
-		c.Database.Session.SetSocketTimeout(timeout)
-		c.Database.Session.SetSyncTimeout(timeout)
+		s.SetSocketTimeout(timeout)
+		s.SetSyncTimeout(timeout)
 	}
+	c.Database.Session = s
 	return c, nil
 }
 
