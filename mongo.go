@@ -52,8 +52,9 @@ type Handler func(ctx context.Context) (*mgo.Collection, error)
 
 // NewHandler creates an new mongo handler
 func NewHandler(s *mgo.Session, db, collection string) Handler {
+	c := s.DB(db).C(collection)
 	return func(ctx context.Context) (*mgo.Collection, error) {
-		return s.DB(db).C(collection), nil
+		return c, nil
 	}
 }
 
