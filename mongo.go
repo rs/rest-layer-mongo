@@ -10,29 +10,12 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-// Handler handles resource storage in a MongoDB collection.
-type Handler struct {
-	session *mgo.Session
-	dbName  string
-	colName string
-}
-
 // mongoItem is a bson representation of a resource.Item
 type mongoItem struct {
 	ID      interface{}            `bson:"_id"`
 	ETag    string                 `bson:"_etag"`
 	Updated time.Time              `bson:"_updated"`
 	Payload map[string]interface{} `bson:",inline"`
-}
-
-// NewHandler creates an new mongo handler
-func NewHandler(s *mgo.Session, db, collection string) *Handler {
-	s.EnsureSafe(&mgo.Safe{})
-	return &Handler{
-		session: s,
-		dbName:  db,
-		colName: collection,
-	}
 }
 
 // newMongoItem converts a resource.Item into a mongoItem
@@ -64,14 +47,31 @@ func newItem(i *mongoItem) *resource.Item {
 	}
 }
 
+// Handler handles resource storage in a MongoDB collection.
+type Handler func(ctx context.Context) (*mgo.Collection, error)
+
+// NewHandler creates an new mongo handler
+func NewHandler(s *mgo.Session, db, collection string) Handler {
+	c := func() *mgo.Collection {
+		return s.DB(db).C(collection)
+	}
+	return func(ctx context.Context) (*mgo.Collection, error) {
+		return c(), nil
+	}
+}
+
 // C returns the mongo collection managed by this storage handler
 // from a Copy() of the mgo session.
-func (m *Handler) c(ctx context.Context) (*mgo.Collection, error) {
+func (m Handler) c(ctx context.Context) (*mgo.Collection, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	c, err := m(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// With mgo, session.Copy() pulls a connection from the connection pool
-	s := m.session.Copy()
+	s := c.Database.Session.Copy()
 	// Ensure safe mode is enabled in order to get errors
 	s.EnsureSafe(&mgo.Safe{})
 	// Set a timeout to match the context deadline if any
@@ -83,16 +83,17 @@ func (m *Handler) c(ctx context.Context) (*mgo.Collection, error) {
 		s.SetSocketTimeout(timeout)
 		s.SetSyncTimeout(timeout)
 	}
-	return s.DB(m.dbName).C(m.colName), nil
+	c.Database.Session = s
+	return c, nil
 }
 
 // close returns a mgo.Collection's session to the connection pool.
-func (m *Handler) close(c *mgo.Collection) {
+func (m Handler) close(c *mgo.Collection) {
 	c.Database.Session.Close()
 }
 
 // Insert inserts new items in the mongo collection
-func (m *Handler) Insert(ctx context.Context, items []*resource.Item) error {
+func (m Handler) Insert(ctx context.Context, items []*resource.Item) error {
 	mItems := make([]interface{}, len(items))
 	for i, item := range items {
 		mItems[i] = newMongoItem(item)
@@ -114,7 +115,7 @@ func (m *Handler) Insert(ctx context.Context, items []*resource.Item) error {
 }
 
 // Update replace an item by a new one in the mongo collection
-func (m *Handler) Update(ctx context.Context, item *resource.Item, original *resource.Item) error {
+func (m Handler) Update(ctx context.Context, item *resource.Item, original *resource.Item) error {
 	mItem := newMongoItem(item)
 	c, err := m.c(ctx)
 	if err != nil {
@@ -141,7 +142,7 @@ func (m *Handler) Update(ctx context.Context, item *resource.Item, original *res
 }
 
 // Delete deletes an item from the mongo collection
-func (m *Handler) Delete(ctx context.Context, item *resource.Item) error {
+func (m Handler) Delete(ctx context.Context, item *resource.Item) error {
 	c, err := m.c(ctx)
 	if err != nil {
 		return err
@@ -167,7 +168,7 @@ func (m *Handler) Delete(ctx context.Context, item *resource.Item) error {
 }
 
 // Clear clears all items from the mongo collection matching the lookup
-func (m *Handler) Clear(ctx context.Context, lookup *resource.Lookup) (int, error) {
+func (m Handler) Clear(ctx context.Context, lookup *resource.Lookup) (int, error) {
 	q, err := getQuery(lookup)
 	if err != nil {
 		return 0, err
@@ -188,7 +189,7 @@ func (m *Handler) Clear(ctx context.Context, lookup *resource.Lookup) (int, erro
 }
 
 // Find items from the mongo collection matching the provided lookup
-func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, offset, limit int) (*resource.ItemList, error) {
+func (m Handler) Find(ctx context.Context, lookup *resource.Lookup, offset, limit int) (*resource.ItemList, error) {
 	q, err := getQuery(lookup)
 	if err != nil {
 		return nil, err
@@ -242,7 +243,7 @@ func (m *Handler) Find(ctx context.Context, lookup *resource.Lookup, offset, lim
 }
 
 // Count counts the number items matching the lookup filter
-func (m *Handler) Count(ctx context.Context, lookup *resource.Lookup) (int, error) {
+func (m Handler) Count(ctx context.Context, lookup *resource.Lookup) (int, error) {
 	q, err := getQuery(lookup)
 	if err != nil {
 		return -1, err
