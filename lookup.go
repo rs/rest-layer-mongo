@@ -2,7 +2,7 @@ package mongo
 
 import (
 	"github.com/rs/rest-layer/resource"
-	"github.com/rs/rest-layer/schema"
+	"github.com/rs/rest-layer/schema/query"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -39,47 +39,47 @@ func getSort(l *resource.Lookup) []string {
 	return s
 }
 
-func translateQuery(q schema.Query) (bson.M, error) {
+func translateQuery(q query.Query) (bson.M, error) {
 	b := bson.M{}
 	for _, exp := range q {
 		switch t := exp.(type) {
-		case schema.And:
+		case query.And:
 			s := []bson.M{}
 			for _, subExp := range t {
-				sb, err := translateQuery(schema.Query{subExp})
+				sb, err := translateQuery(query.Query{subExp})
 				if err != nil {
 					return nil, err
 				}
 				s = append(s, sb)
 			}
 			b["$and"] = s
-		case schema.Or:
+		case query.Or:
 			s := []bson.M{}
 			for _, subExp := range t {
-				sb, err := translateQuery(schema.Query{subExp})
+				sb, err := translateQuery(query.Query{subExp})
 				if err != nil {
 					return nil, err
 				}
 				s = append(s, sb)
 			}
 			b["$or"] = s
-		case schema.In:
+		case query.In:
 			b[getField(t.Field)] = bson.M{"$in": valuesToInterface(t.Values)}
-		case schema.NotIn:
+		case query.NotIn:
 			b[getField(t.Field)] = bson.M{"$nin": valuesToInterface(t.Values)}
-		case schema.Equal:
+		case query.Equal:
 			b[getField(t.Field)] = t.Value
-		case schema.NotEqual:
+		case query.NotEqual:
 			b[getField(t.Field)] = bson.M{"$ne": t.Value}
-		case schema.GreaterThan:
+		case query.GreaterThan:
 			b[getField(t.Field)] = bson.M{"$gt": t.Value}
-		case schema.GreaterOrEqual:
+		case query.GreaterOrEqual:
 			b[getField(t.Field)] = bson.M{"$gte": t.Value}
-		case schema.LowerThan:
+		case query.LowerThan:
 			b[getField(t.Field)] = bson.M{"$lt": t.Value}
-		case schema.LowerOrEqual:
+		case query.LowerOrEqual:
 			b[getField(t.Field)] = bson.M{"$lte": t.Value}
-		case schema.Regex:
+		case query.Regex:
 			b[getField(t.Field)] = bson.M{"$regex": t.Value.String()}
 		default:
 			return nil, resource.ErrNotImplemented
@@ -88,7 +88,7 @@ func translateQuery(q schema.Query) (bson.M, error) {
 	return b, nil
 }
 
-func valuesToInterface(v []schema.Value) []interface{} {
+func valuesToInterface(v []query.Value) []interface{} {
 	I := make([]interface{}, len(v))
 	for i, _v := range v {
 		I[i] = _v

@@ -8,7 +8,7 @@ import (
 	"regexp"
 
 	"github.com/rs/rest-layer/resource"
-	"github.com/rs/rest-layer/schema"
+	"github.com/rs/rest-layer/schema/query"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/mgo.v2"
 )
@@ -161,15 +161,15 @@ func TestClear(t *testing.T) {
 	err = h.Insert(context.Background(), items)
 	assert.NoError(t, err)
 
-	lookup := resource.NewLookupWithQuery(schema.Query{
-		schema.In{Field: "name", Values: []schema.Value{"c", "d"}},
+	lookup := resource.NewLookupWithQuery(query.Query{
+		query.In{Field: "name", Values: []query.Value{"c", "d"}},
 	})
 	deleted, err := h.Clear(context.Background(), lookup)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, deleted)
 
-	lookup = resource.NewLookupWithQuery(schema.Query{
-		schema.Equal{Field: "id", Value: "2"},
+	lookup = resource.NewLookupWithQuery(query.Query{
+		query.Equal{Field: "id", Value: "2"},
 	})
 	deleted, err = h.Clear(context.Background(), lookup)
 	assert.NoError(t, err)
@@ -206,8 +206,8 @@ func TestFind(t *testing.T) {
 		// Do not check result's content as its order is unpredictable
 	}
 
-	lookup = resource.NewLookupWithQuery(schema.Query{
-		schema.Equal{Field: "name", Value: "c"},
+	lookup = resource.NewLookupWithQuery(query.Query{
+		query.Equal{Field: "name", Value: "c"},
 	})
 	l, err = h.Find(ctx, lookup, 0, 1)
 	if assert.NoError(t, err) {
@@ -219,8 +219,8 @@ func TestFind(t *testing.T) {
 		}
 	}
 
-	lookup = resource.NewLookupWithQuery(schema.Query{
-		schema.In{Field: "name", Values: []schema.Value{"c", "d"}},
+	lookup = resource.NewLookupWithQuery(query.Query{
+		query.In{Field: "name", Values: []query.Value{"c", "d"}},
 	})
 	lookup.SetSorts([]string{"name"})
 	l, err = h.Find(ctx, lookup, 0, 100)
@@ -236,8 +236,8 @@ func TestFind(t *testing.T) {
 		}
 	}
 
-	lookup = resource.NewLookupWithQuery(schema.Query{
-		schema.Equal{Field: "id", Value: "3"},
+	lookup = resource.NewLookupWithQuery(query.Query{
+		query.Equal{Field: "id", Value: "3"},
 	})
 	l, err = h.Find(ctx, lookup, 0, 1)
 	if assert.NoError(t, err) {
@@ -250,8 +250,8 @@ func TestFind(t *testing.T) {
 	}
 
 	if v, err := regexp.Compile("^re[s]{1}t-.+yer.+exp$"); err == nil {
-		lookup = resource.NewLookupWithQuery(schema.Query{
-			schema.Regex{Field: "name", Value: v},
+		lookup = resource.NewLookupWithQuery(query.Query{
+			query.Regex{Field: "name", Value: v},
 		})
 	}
 	l, err = h.Find(ctx, lookup, 0, 1)
@@ -264,8 +264,8 @@ func TestFind(t *testing.T) {
 		}
 	}
 
-	lookup = resource.NewLookupWithQuery(schema.Query{
-		schema.Equal{Field: "id", Value: "10"},
+	lookup = resource.NewLookupWithQuery(query.Query{
+		query.Equal{Field: "id", Value: "10"},
 	})
 	l, err = h.Find(ctx, lookup, 0, 1)
 	if assert.NoError(t, err) {
@@ -273,8 +273,8 @@ func TestFind(t *testing.T) {
 		assert.Len(t, l.Items, 0)
 	}
 
-	lookup = resource.NewLookupWithQuery(schema.Query{
-		schema.In{Field: "id", Values: []schema.Value{"3", "4", "10"}},
+	lookup = resource.NewLookupWithQuery(query.Query{
+		query.In{Field: "id", Values: []query.Value{"3", "4", "10"}},
 	})
 	l, err = h.Find(ctx, lookup, 0, -1)
 	if assert.NoError(t, err) {
