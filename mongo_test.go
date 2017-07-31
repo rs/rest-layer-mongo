@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"regexp"
-
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema/query"
 	"github.com/stretchr/testify/assert"
@@ -161,19 +159,19 @@ func TestClear(t *testing.T) {
 	err = h.Insert(context.Background(), items)
 	assert.NoError(t, err)
 
-	lookup := resource.NewLookupWithQuery(query.Query{
-		query.In{Field: "name", Values: []query.Value{"c", "d"}},
-	})
-	deleted, err := h.Clear(context.Background(), lookup)
-	assert.NoError(t, err)
-	assert.Equal(t, 2, deleted)
+	q, err := query.New("", `{name:{$in:["c","d"]}}`, "", nil)
+	if assert.NoError(t, err) {
+		deleted, err := h.Clear(context.Background(), q)
+		assert.NoError(t, err)
+		assert.Equal(t, 2, deleted)
+	}
 
-	lookup = resource.NewLookupWithQuery(query.Query{
-		query.Equal{Field: "id", Value: "2"},
-	})
-	deleted, err = h.Clear(context.Background(), lookup)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, deleted)
+	q, err = query.New("", `{id:"2"}`, "", nil)
+	if assert.NoError(t, err) {
+		deleted, err := h.Clear(context.Background(), q)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, deleted)
+	}
 }
 
 func TestFind(t *testing.T) {
@@ -198,87 +196,83 @@ func TestFind(t *testing.T) {
 	assert.NoError(t, h.Insert(ctx, items))
 	assert.NoError(t, h2.Insert(ctx, items))
 
-	lookup := resource.NewLookup()
-	l, err := h.Find(ctx, lookup, 0, -1)
+	l, err := h.Find(ctx, &query.Query{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, 5, l.Total)
 		assert.Len(t, l.Items, 5)
 		// Do not check result's content as its order is unpredictable
 	}
 
-	lookup = resource.NewLookupWithQuery(query.Query{
-		query.Equal{Field: "name", Value: "c"},
-	})
-	l, err = h.Find(ctx, lookup, 0, 1)
+	q, err := query.New("", `{name:"c"}`, "", query.Page(1, 1, 0))
 	if assert.NoError(t, err) {
-		assert.Equal(t, -1, l.Total)
-		if assert.Len(t, l.Items, 1) {
-			item := l.Items[0]
-			assert.Equal(t, "3", item.ID)
-			assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
+		l, err = h.Find(ctx, q)
+		if assert.NoError(t, err) {
+			assert.Equal(t, -1, l.Total)
+			if assert.Len(t, l.Items, 1) {
+				item := l.Items[0]
+				assert.Equal(t, "3", item.ID)
+				assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
+			}
 		}
 	}
 
-	lookup = resource.NewLookupWithQuery(query.Query{
-		query.In{Field: "name", Values: []query.Value{"c", "d"}},
-	})
-	lookup.SetSorts([]string{"name"})
-	l, err = h.Find(ctx, lookup, 0, 100)
+	q, err = query.New("", `{name:{$in:["c","d"]}}`, "name", query.Page(1, 100, 0))
 	if assert.NoError(t, err) {
-		assert.Equal(t, 2, l.Total)
-		if assert.Len(t, l.Items, 2) {
-			item := l.Items[0]
-			assert.Equal(t, "3", item.ID)
-			assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
-			item = l.Items[1]
-			assert.Equal(t, "4", item.ID)
-			assert.Equal(t, map[string]interface{}{"id": "4", "name": "d", "age": 4}, item.Payload)
+		l, err = h.Find(ctx, q)
+		if assert.NoError(t, err) {
+			assert.Equal(t, 2, l.Total)
+			if assert.Len(t, l.Items, 2) {
+				item := l.Items[0]
+				assert.Equal(t, "3", item.ID)
+				assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
+				item = l.Items[1]
+				assert.Equal(t, "4", item.ID)
+				assert.Equal(t, map[string]interface{}{"id": "4", "name": "d", "age": 4}, item.Payload)
+			}
 		}
 	}
 
-	lookup = resource.NewLookupWithQuery(query.Query{
-		query.Equal{Field: "id", Value: "3"},
-	})
-	l, err = h.Find(ctx, lookup, 0, 1)
+	q, err = query.New("", `{id:"3"}`, "", query.Page(1, 1, 0))
 	if assert.NoError(t, err) {
-		assert.Equal(t, -1, l.Total)
-		if assert.Len(t, l.Items, 1) {
-			item := l.Items[0]
-			assert.Equal(t, "3", item.ID)
-			assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
+		l, err = h.Find(ctx, q)
+		if assert.NoError(t, err) {
+			assert.Equal(t, -1, l.Total)
+			if assert.Len(t, l.Items, 1) {
+				item := l.Items[0]
+				assert.Equal(t, "3", item.ID)
+				assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
+			}
 		}
 	}
 
-	if v, err := regexp.Compile("^re[s]{1}t-.+yer.+exp$"); err == nil {
-		lookup = resource.NewLookupWithQuery(query.Query{
-			query.Regex{Field: "name", Value: v},
-		})
-	}
-	l, err = h.Find(ctx, lookup, 0, 1)
+	q, err = query.New("", `{name:{$regex:"^re[s]{1}t-.+yer.+exp$"}}`, "", query.Page(1, 1, 0))
 	if assert.NoError(t, err) {
-		assert.Equal(t, -1, l.Total)
-		if assert.Len(t, l.Items, 1) {
-			item := l.Items[0]
-			assert.Equal(t, "5", item.ID)
-			assert.Equal(t, map[string]interface{}{"id": "5", "name": "rest-layer-regexp"}, item.Payload)
+		l, err = h.Find(ctx, q)
+		if assert.NoError(t, err) {
+			assert.Equal(t, -1, l.Total)
+			if assert.Len(t, l.Items, 1) {
+				item := l.Items[0]
+				assert.Equal(t, "5", item.ID)
+				assert.Equal(t, map[string]interface{}{"id": "5", "name": "rest-layer-regexp"}, item.Payload)
+			}
 		}
 	}
 
-	lookup = resource.NewLookupWithQuery(query.Query{
-		query.Equal{Field: "id", Value: "10"},
-	})
-	l, err = h.Find(ctx, lookup, 0, 1)
+	q, err = query.New("", `{id:"10"}`, "", query.Page(1, 1, 0))
 	if assert.NoError(t, err) {
-		assert.Equal(t, 0, l.Total)
-		assert.Len(t, l.Items, 0)
+		l, err = h.Find(ctx, q)
+		if assert.NoError(t, err) {
+			assert.Equal(t, 0, l.Total)
+			assert.Len(t, l.Items, 0)
+		}
 	}
 
-	lookup = resource.NewLookupWithQuery(query.Query{
-		query.In{Field: "id", Values: []query.Value{"3", "4", "10"}},
-	})
-	l, err = h.Find(ctx, lookup, 0, -1)
+	q, err = query.New("", `{id:{$in:["3","4","10"]}}`, "", nil)
 	if assert.NoError(t, err) {
-		assert.Equal(t, 2, l.Total)
-		assert.Len(t, l.Items, 2)
+		l, err = h.Find(ctx, q)
+		if assert.NoError(t, err) {
+			assert.Equal(t, 2, l.Total)
+			assert.Len(t, l.Items, 2)
+		}
 	}
 }

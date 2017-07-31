@@ -16,37 +16,36 @@ func getField(f string) string {
 	return f
 }
 
-// getQuery transform a resource.Lookup into a Mongo query
-func getQuery(l *resource.Lookup) (bson.M, error) {
-	return translateQuery(l.Filter())
+// getQuery transform a query into a Mongo query
+func getQuery(q *query.Query) (bson.M, error) {
+	return translatePredicate(q.Predicate)
 }
 
 // getSort transform a resource.Lookup into a Mongo sort list.
 // If the sort list is empty, fallback to _id.
-func getSort(l *resource.Lookup) []string {
-	ln := len(l.Sort())
-	if ln == 0 {
+func getSort(q *query.Query) []string {
+	if len(q.Sort) == 0 {
 		return []string{"_id"}
 	}
-	s := make([]string, ln)
-	for i, sort := range l.Sort() {
-		if len(sort) > 0 && sort[0] == '-' {
-			s[i] = "-" + getField(sort[1:])
+	s := make([]string, len(q.Sort))
+	for i, sort := range q.Sort {
+		if sort.Reversed {
+			s[i] = "-" + getField(sort.Name)
 		} else {
-			s[i] = getField(sort)
+			s[i] = getField(sort.Name)
 		}
 	}
 	return s
 }
 
-func translateQuery(q query.Query) (bson.M, error) {
+func translatePredicate(q query.Predicate) (bson.M, error) {
 	b := bson.M{}
 	for _, exp := range q {
 		switch t := exp.(type) {
 		case query.And:
 			s := []bson.M{}
 			for _, subExp := range t {
-				sb, err := translateQuery(query.Query{subExp})
+				sb, err := translatePredicate(query.Predicate{subExp})
 				if err != nil {
 					return nil, err
 				}
@@ -56,7 +55,7 @@ func translateQuery(q query.Query) (bson.M, error) {
 		case query.Or:
 			s := []bson.M{}
 			for _, subExp := range t {
-				sb, err := translateQuery(query.Query{subExp})
+				sb, err := translatePredicate(query.Predicate{subExp})
 				if err != nil {
 					return nil, err
 				}
