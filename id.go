@@ -36,6 +36,10 @@ type ObjectID struct{}
 
 // Validate implements FieldValidator interface
 func (v ObjectID) Validate(value interface{}) (interface{}, error) {
+	_, ok := value.(bson.ObjectId)
+	if ok {
+		return value, nil
+	}
 	s, ok := value.(string)
 	if !ok {
 		return nil, errors.New("invalid object id")
