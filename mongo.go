@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rs/rest-layer/resource"
+	"github.com/rs/rest-layer/schema/query"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -167,9 +168,9 @@ func (m Handler) Delete(ctx context.Context, item *resource.Item) error {
 	return err
 }
 
-// Clear clears all items from the mongo collection matching the lookup
-func (m Handler) Clear(ctx context.Context, lookup *resource.Lookup) (int, error) {
-	q, err := getQuery(lookup)
+// Clear clears all items from the mongo collection matching the query
+func (m Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
+	qry, err := getQuery(q)
 	if err != nil {
 		return 0, err
 	}
@@ -178,7 +179,7 @@ func (m Handler) Clear(ctx context.Context, lookup *resource.Lookup) (int, error
 		return 0, err
 	}
 	defer m.close(c)
-	info, err := c.RemoveAll(q)
+	info, err := c.RemoveAll(qry)
 	if err != nil {
 		return 0, err
 	}
@@ -188,26 +189,30 @@ func (m Handler) Clear(ctx context.Context, lookup *resource.Lookup) (int, error
 	return info.Removed, nil
 }
 
-// Find items from the mongo collection matching the provided lookup
-func (m Handler) Find(ctx context.Context, lookup *resource.Lookup, offset, limit int) (*resource.ItemList, error) {
-	q, err := getQuery(lookup)
+// Find items from the mongo collection matching the provided query
+func (m Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, error) {
+	qry, err := getQuery(q)
 	if err != nil {
 		return nil, err
 	}
-	s := getSort(lookup)
+	srt := getSort(q)
 	c, err := m.c(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer m.close(c)
 	var mItem mongoItem
-	query := c.Find(q).Sort(s...)
+	mq := c.Find(qry).Sort(srt...)
 
-	if offset > 0 {
-		query.Skip(offset)
-	}
-	if limit >= 0 {
-		query.Limit(limit)
+	limit := -1
+	if q.Window != nil {
+		limit = q.Window.Limit
+		if q.Window.Offset > 0 {
+			mq.Skip(q.Window.Offset)
+		}
+		if q.Window.Limit >= 0 {
+			mq.Limit(q.Window.Limit)
+		}
 	}
 	// Apply context deadline if any
 	if dl, ok := ctx.Deadline(); ok {
@@ -215,13 +220,17 @@ func (m Handler) Find(ctx context.Context, lookup *resource.Lookup, offset, limi
 		if dur < 0 {
 			dur = 0
 		}
-		query.SetMaxTime(dur)
+		mq.SetMaxTime(dur)
 	}
 	// Perform request
-	iter := query.Iter()
-	// Total is set to -1 because we have no easy way with Mongodb to to compute this value
-	// without performing two requests.
-	list := &resource.ItemList{Total: -1, Limit: limit, Items: []*resource.Item{}}
+	iter := mq.Iter()
+	// Total is set to -1 because we have no easy way with MongoDB to to compute
+	// this value without performing two requests.
+	list := &resource.ItemList{
+		Total: -1,
+		Limit: limit,
+		Items: []*resource.Item{},
+	}
 	for iter.Next(&mItem) {
 		// Check if context is still ok before to continue
 		if err = ctx.Err(); err != nil {
@@ -236,15 +245,18 @@ func (m Handler) Find(ctx context.Context, lookup *resource.Lookup, offset, limi
 	}
 	// If the number of returned elements is lower than requested limit, or not
 	// limit is requested, we can deduce the total number of element for free.
-	if limit == -1 || len(list.Items) < limit {
-		list.Total = offset + len(list.Items)
+	if limit < 0 || len(list.Items) < limit {
+		list.Total = len(list.Items)
+		if q.Window != nil && q.Window.Offset > 0 {
+			list.Total += q.Window.Offset
+		}
 	}
 	return list, err
 }
 
 // Count counts the number items matching the lookup filter
-func (m Handler) Count(ctx context.Context, lookup *resource.Lookup) (int, error) {
-	q, err := getQuery(lookup)
+func (m Handler) Count(ctx context.Context, query *query.Query) (int, error) {
+	q, err := getQuery(query)
 	if err != nil {
 		return -1, err
 	}
@@ -253,14 +265,14 @@ func (m Handler) Count(ctx context.Context, lookup *resource.Lookup) (int, error
 		return -1, err
 	}
 	defer m.close(c)
-	query := c.Find(q)
+	mq := c.Find(q)
 	// Apply context deadline if any
 	if dl, ok := ctx.Deadline(); ok {
 		dur := dl.Sub(time.Now())
 		if dur < 0 {
 			dur = 0
 		}
-		query.SetMaxTime(dur)
+		mq.SetMaxTime(dur)
 	}
-	return query.Count()
+	return mq.Count()
 }
