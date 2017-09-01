@@ -61,3 +61,11 @@ func (v ObjectID) Serialize(value interface{}) (interface{}, error) {
 	}
 	return id.Hex(), nil
 }
+
+// BuildJSONSchema implements the jsonschema.Builder interface.
+func (v ObjectID) BuildJSONSchema() (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"type":    "string",
+		"pattern": "^[0-9a-fA-F]{24}$",
+	}, nil
+}
