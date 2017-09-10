@@ -210,8 +210,8 @@ func TestFind(t *testing.T) {
 			assert.Equal(t, -1, l.Total)
 			if assert.Len(t, l.Items, 1) {
 				item := l.Items[0]
-				assert.Equal(t, "3", item.ID)
-				assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
+				assert.Equal(t, "3", UnwrapBsonObjectIdWrapper(item.ID))
+				assert.Equal(t, map[string]interface{}{"id": BsonObjectIdWrapper{"3"}, "name": "c", "age": 3}, item.Payload)
 			}
 		}
 	}
@@ -223,11 +223,11 @@ func TestFind(t *testing.T) {
 			assert.Equal(t, 2, l.Total)
 			if assert.Len(t, l.Items, 2) {
 				item := l.Items[0]
-				assert.Equal(t, "3", item.ID)
-				assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
+				assert.Equal(t, "3", UnwrapBsonObjectIdWrapper(item.ID))
+				assert.Equal(t, map[string]interface{}{"id": BsonObjectIdWrapper{"3"}, "name": "c", "age": 3}, item.Payload)
 				item = l.Items[1]
-				assert.Equal(t, "4", item.ID)
-				assert.Equal(t, map[string]interface{}{"id": "4", "name": "d", "age": 4}, item.Payload)
+				assert.Equal(t, "4", UnwrapBsonObjectIdWrapper(item.ID))
+				assert.Equal(t, map[string]interface{}{"id": BsonObjectIdWrapper{"4"}, "name": "d", "age": 4}, item.Payload)
 			}
 		}
 	}
@@ -239,8 +239,8 @@ func TestFind(t *testing.T) {
 			assert.Equal(t, -1, l.Total)
 			if assert.Len(t, l.Items, 1) {
 				item := l.Items[0]
-				assert.Equal(t, "3", item.ID)
-				assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
+				assert.Equal(t, "3", UnwrapBsonObjectIdWrapper(item.ID))
+				assert.Equal(t, map[string]interface{}{"id": BsonObjectIdWrapper{"3"}, "name": "c", "age": 3}, item.Payload)
 			}
 		}
 	}
@@ -252,8 +252,8 @@ func TestFind(t *testing.T) {
 			assert.Equal(t, -1, l.Total)
 			if assert.Len(t, l.Items, 1) {
 				item := l.Items[0]
-				assert.Equal(t, "5", item.ID)
-				assert.Equal(t, map[string]interface{}{"id": "5", "name": "rest-layer-regexp"}, item.Payload)
+				assert.Equal(t, "5", UnwrapBsonObjectIdWrapper(item.ID))
+				assert.Equal(t, map[string]interface{}{"id": BsonObjectIdWrapper{"5"}, "name": "rest-layer-regexp"}, item.Payload)
 			}
 		}
 	}
