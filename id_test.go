@@ -18,7 +18,7 @@ func TestObjectIDValidate(t *testing.T) {
 	v := &mongo.ObjectID{}
 
 	t.Run("validObjectID", func(t *testing.T) {
-		expect := bson.ObjectIdHex(validObjectID)
+		expect := mongo.BsonObjectIdWrapper{bson.ObjectIdHex(validObjectID)}
 		id, err := v.Validate(validObjectID)
 		if expect != id {
 			t.Errorf("v.Validate(validObjectID):\n %v (expect) != %v (actual)", expect, id)

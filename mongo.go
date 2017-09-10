@@ -29,7 +29,7 @@ func newMongoItem(i *resource.Item) *mongoItem {
 		}
 	}
 	return &mongoItem{
-		ID:      i.ID,
+		ID:      UnwrapBsonObjectIdWrapper(i.ID),
 		ETag:    i.ETag,
 		Updated: i.Updated,
 		Payload: p,
@@ -39,9 +39,9 @@ func newMongoItem(i *resource.Item) *mongoItem {
 // newItem converts a back mongoItem into a resource.Item
 func newItem(i *mongoItem) *resource.Item {
 	// Add the id back (we use the same map hoping the mongoItem won't be stored back)
-	i.Payload["id"] = i.ID
+	i.Payload["id"] = BsonObjectIdWrapper{i.ID}
 	return &resource.Item{
-		ID:      i.ID,
+		ID:      BsonObjectIdWrapper{i.ID},
 		ETag:    i.ETag,
 		Updated: i.Updated,
 		Payload: i.Payload,
@@ -123,11 +123,11 @@ func (m Handler) Update(ctx context.Context, item *resource.Item, original *reso
 		return err
 	}
 	defer m.close(c)
-	err = c.Update(bson.M{"_id": original.ID, "_etag": original.ETag}, mItem)
+	err = c.Update(bson.M{"_id": UnwrapBsonObjectIdWrapper(original.ID), "_etag": original.ETag}, mItem)
 	if err == mgo.ErrNotFound {
 		// Determine if the item is not found or if the item is found but etag missmatch
 		var count int
-		count, err = c.FindId(original.ID).Count()
+		count, err = c.FindId(UnwrapBsonObjectIdWrapper(original.ID)).Count()
 		if err != nil {
 			// The find returned an unexpected err, just forward it with no mapping
 		} else if count == 0 {
@@ -149,11 +149,11 @@ func (m Handler) Delete(ctx context.Context, item *resource.Item) error {
 		return err
 	}
 	defer m.close(c)
-	err = c.Remove(bson.M{"_id": item.ID, "_etag": item.ETag})
+	err = c.Remove(bson.M{"_id": UnwrapBsonObjectIdWrapper(item.ID), "_etag": item.ETag})
 	if err == mgo.ErrNotFound {
 		// Determine if the item is not found or if the item is found but etag missmatch
 		var count int
-		count, err = c.FindId(item.ID).Count()
+		count, err = c.FindId(UnwrapBsonObjectIdWrapper(item.ID)).Count()
 		if err != nil {
 			// The find returned an unexpected err, just forward it with no mapping
 		} else if count == 0 {
