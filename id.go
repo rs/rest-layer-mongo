@@ -36,7 +36,7 @@ type ObjectID struct{}
 
 // Validate implements FieldValidator interface
 func (v ObjectID) Validate(value interface{}) (interface{}, error) {
-	_, ok := value.(bson.ObjectId)
+	_, ok := value.(BsonObjectIdWrapper)
 	if ok {
 		return value, nil
 	}
@@ -50,16 +50,16 @@ func (v ObjectID) Validate(value interface{}) (interface{}, error) {
 	if !bson.IsObjectIdHex(s) {
 		return nil, fmt.Errorf("invalid object id")
 	}
-	return bson.ObjectIdHex(s), nil
+	return BsonObjectIdWrapper{bson.ObjectIdHex(s)}, nil
 }
 
 // Serialize implements FieldSerializer interface
 func (v ObjectID) Serialize(value interface{}) (interface{}, error) {
-	id, ok := value.(bson.ObjectId)
+	id, ok := value.(BsonObjectIdWrapper)
 	if !ok {
 		return nil, errors.New("not an ObjectId")
 	}
-	return id.Hex(), nil
+	return id.String(), nil
 }
 
 // BuildJSONSchema implements the jsonschema.Builder interface.
@@ -68,4 +68,30 @@ func (v ObjectID) BuildJSONSchema() (map[string]interface{}, error) {
 		"type":    "string",
 		"pattern": "^[0-9a-fA-F]{24}$",
 	}, nil
+}
+
+// BsonObjectIdWrapper wraps the original bson.ObjectId
+type BsonObjectIdWrapper struct {
+	Value interface{}
+}
+
+// String converting to string representation depending on the embed type
+func (v BsonObjectIdWrapper) String() string {
+	switch t := v.Value.(type) {
+	case bson.ObjectId:
+		return t.Hex()
+	case string:
+		return t
+	case fmt.Stringer:
+		return t.String()
+	}
+	panic("Unknown")
+}
+
+// UnwrapBsonObjectIdWrapper unwraps to original bson.ObjectId (if any)
+func UnwrapBsonObjectIdWrapper(v interface{}) interface{} {
+	if t, ok := v.(BsonObjectIdWrapper); ok {
+		return t.Value
+	}
+	return v
 }
