@@ -203,6 +203,12 @@ func TestFind(t *testing.T) {
 		// Do not check result's content as its order is unpredictable
 	}
 
+	l, err = h.Find(ctx, &query.Query{Window: &query.Window{Limit: 0}})
+	if assert.NoError(t, err) {
+		assert.Equal(t, 5, l.Total)
+		assert.Len(t, l.Items, 0)
+	}
+
 	q, err := query.New("", `{name:"c"}`, "", query.Page(1, 1, 0))
 	if assert.NoError(t, err) {
 		l, err = h.Find(ctx, q)
