@@ -191,6 +191,20 @@ func (m Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
 
 // Find items from the mongo collection matching the provided query
 func (m Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, error) {
+	// MongoDB will return all records on Limit=0. Workaround that behaviour.
+	// https://docs.mongodb.com/manual/reference/method/cursor.limit/#zero-value
+	if q.Window != nil && q.Window.Limit == 0 {
+		n, err := m.Count(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		list := &resource.ItemList{
+			Total: n,
+			Limit: q.Window.Limit,
+			Items: []*resource.Item{},
+		}
+		return list, err
+	}
 	qry, err := getQuery(q)
 	if err != nil {
 		return nil, err
