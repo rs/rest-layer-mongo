@@ -257,12 +257,17 @@ func (m Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 	if err := iter.Close(); err != nil {
 		return nil, err
 	}
-	// If the number of returned elements is lower than requested limit, or not
+	// If the number of returned elements is lower than requested limit, or no
 	// limit is requested, we can deduce the total number of element for free.
 	if limit < 0 || len(list.Items) < limit {
-		list.Total = len(list.Items)
 		if q.Window != nil && q.Window.Offset > 0 {
-			list.Total += q.Window.Offset
+			if len(list.Items) > 0 {
+				list.Total = q.Window.Offset + len(list.Items)
+			}
+			// If there are no items returned when Offset > 0, we may be out-of-bounds,
+			// and therefore cannot deduce the total count of items.
+		} else {
+			list.Total = len(list.Items)
 		}
 	}
 	return list, err

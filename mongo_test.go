@@ -209,6 +209,24 @@ func TestFind(t *testing.T) {
 		assert.Len(t, l.Items, 0)
 	}
 
+	l, err = h.Find(ctx, &query.Query{Window: &query.Window{Limit: -1, Offset: 2}})
+	if assert.NoError(t, err) {
+		assert.Equal(t, 5, l.Total)
+		assert.Len(t, l.Items, 3)
+	}
+
+	l, err = h.Find(ctx, &query.Query{Window: &query.Window{Limit: -1, Offset: 5}})
+	if assert.NoError(t, err) {
+		assert.Equal(t, -1, l.Total)
+		assert.Len(t, l.Items, 0)
+	}
+
+	l, err = h.Find(ctx, &query.Query{Window: &query.Window{Limit: -1, Offset: 6}})
+	if assert.NoError(t, err) {
+		assert.Equal(t, -1, l.Total)
+		assert.Len(t, l.Items, 0)
+	}
+
 	q, err := query.New("", `{name:"c"}`, "", query.Page(1, 1, 0))
 	if assert.NoError(t, err) {
 		l, err = h.Find(ctx, q)
