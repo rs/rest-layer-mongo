@@ -3,6 +3,7 @@ package mongo
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/rs/rest-layer/resource"
@@ -40,12 +41,19 @@ func newMongoItem(i *resource.Item) *mongoItem {
 func newItem(i *mongoItem) *resource.Item {
 	// Add the id back (we use the same map hoping the mongoItem won't be stored back)
 	i.Payload["id"] = i.ID
-	return &resource.Item{
+	item := &resource.Item{
 		ID:      i.ID,
 		ETag:    i.ETag,
 		Updated: i.Updated,
 		Payload: i.Payload,
 	}
+
+	if item.ETag == "" {
+		if v, ok := i.ID.(bson.ObjectId); ok {
+			item.ETag = "W/" + v.Hex()
+		}
+	}
+	return item
 }
 
 // Handler handles resource storage in a MongoDB collection.
@@ -123,7 +131,15 @@ func (m Handler) Update(ctx context.Context, item *resource.Item, original *reso
 		return err
 	}
 	defer m.close(c)
-	err = c.Update(bson.M{"_id": original.ID, "_etag": original.ETag}, mItem)
+	s := bson.M{"_id": original.ID}
+	if strings.HasPrefix(original.ETag, "W/") {
+		// If the original ETag is weak,
+		// then _etag field must be absent from the resource in DB
+		s["_etag"] = bson.M{"$exists": false}
+	} else {
+		s["_etag"] = original.ETag
+	}
+	err = c.Update(s, mItem)
 	if err == mgo.ErrNotFound {
 		// Determine if the item is not found or if the item is found but etag missmatch
 		var count int
@@ -149,7 +165,15 @@ func (m Handler) Delete(ctx context.Context, item *resource.Item) error {
 		return err
 	}
 	defer m.close(c)
-	err = c.Remove(bson.M{"_id": item.ID, "_etag": item.ETag})
+	s := bson.M{"_id": item.ID}
+	if strings.HasPrefix(item.ETag, "W/") {
+		// If the item ETag is weak,
+		// then _etag field must be absent from the resource in DB
+		s["_etag"] = bson.M{"$exists": false}
+	} else {
+		s["_etag"] = item.ETag
+	}
+	err = c.Remove(s)
 	if err == mgo.ErrNotFound {
 		// Determine if the item is not found or if the item is found but etag missmatch
 		var count int
