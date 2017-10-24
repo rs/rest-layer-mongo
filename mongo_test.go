@@ -100,6 +100,45 @@ func TestUpdate(t *testing.T) {
 	// Update refused if original item's etag doesn't match stored one
 	err = h.Update(context.Background(), newItem, oldItem)
 	assert.Equal(t, resource.ErrConflict, err)
+
+	c := s.DB("testupdate").C("testEtag")
+	// Add an item without _etag field
+	c.Insert(map[string]interface{}{"foo": "bar", "_id": "1234", "_updated": now})
+	h2 := NewHandler(s, "testupdate", "testEtag")
+	// A item without _etag field, is extracted with ETag in "p-[id]" format
+	originalItem := &resource.Item{
+		ID:      "1234",
+		ETag:    "p-1234",
+		Updated: now,
+		Payload: map[string]interface{}{
+			"id":  "1234",
+			"foo": "baz",
+		},
+	}
+	item := &resource.Item{
+		ID:      "1234",
+		ETag:    "etag",
+		Updated: now,
+		Payload: map[string]interface{}{
+			"id":  "1234",
+			"foo": "baz",
+		},
+	}
+	// Update an original item with Etag over item in DB without _etag
+	err = h2.Update(context.Background(), item, originalItem)
+	assert.NoError(t, err)
+
+	d := map[string]interface{}{}
+	err = s.DB("testupdate").C("testEtag").FindId("1234").One(&d)
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Equal(t, map[string]interface{}{"foo": "baz", "_id": "1234", "_etag": "etag", "_updated": now}, d)
+
+	// Update an original item with ETag over item in DB with _etag,
+	// fails because _etag is present
+	err = h.Update(context.Background(), item, originalItem)
+	assert.Equal(t, resource.ErrConflict, err)
 }
 
 func TestDelete(t *testing.T) {
@@ -136,6 +175,31 @@ func TestDelete(t *testing.T) {
 	assert.NoError(t, err)
 	item.ETag = "etag2"
 	err = h.Delete(context.Background(), item)
+	assert.Equal(t, resource.ErrConflict, err)
+
+	c := s.DB("testupdate").C("testEtag")
+	// Add an item without _etag field
+	c.Insert(map[string]interface{}{"foo": "bar", "_id": "1234", "_updated": now})
+	c.Insert(map[string]interface{}{"foo": "bar", "_id": "12345", "_etag": "etag", "_updated": now})
+	h2 := NewHandler(s, "testupdate", "testEtag")
+	// A item without _etag field, is extracted with ETag in "p-[id]" format
+	originalItem := &resource.Item{
+		ID:      "1234",
+		ETag:    "p-1234",
+		Updated: now,
+		Payload: map[string]interface{}{
+			"id":  "1234",
+			"foo": "baz",
+		},
+	}
+	// Delete an original item with Etag over item in DB without _etag
+	err = h2.Delete(context.Background(), originalItem)
+	assert.NoError(t, err)
+
+	originalItem.ID = "12345"
+	// Delete an original item with Etag over item in DB with _etag
+	// fails because _etag is present
+	err = h2.Delete(context.Background(), originalItem)
 	assert.Equal(t, resource.ErrConflict, err)
 }
 
@@ -236,6 +300,7 @@ func TestFind(t *testing.T) {
 				item := l.Items[0]
 				assert.Equal(t, "3", item.ID)
 				assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
+				assert.Equal(t, "p-3", item.ETag)
 			}
 		}
 	}

@@ -3,6 +3,7 @@ package mongo
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -50,7 +51,9 @@ func newItem(i *mongoItem) *resource.Item {
 
 	if item.ETag == "" {
 		if v, ok := i.ID.(bson.ObjectId); ok {
-			item.ETag = "W/" + v.Hex()
+			item.ETag = "p-" + v.Hex()
+		} else {
+			item.ETag = "p-" + fmt.Sprint(i.ID)
 		}
 	}
 	return item
@@ -132,8 +135,8 @@ func (m Handler) Update(ctx context.Context, item *resource.Item, original *reso
 	}
 	defer m.close(c)
 	s := bson.M{"_id": original.ID}
-	if strings.HasPrefix(original.ETag, "W/") {
-		// If the original ETag is weak,
+	if strings.HasPrefix(original.ETag, "p-") {
+		// If the original ETag is in "p-[id]" format,
 		// then _etag field must be absent from the resource in DB
 		s["_etag"] = bson.M{"$exists": false}
 	} else {
@@ -166,8 +169,8 @@ func (m Handler) Delete(ctx context.Context, item *resource.Item) error {
 	}
 	defer m.close(c)
 	s := bson.M{"_id": item.ID}
-	if strings.HasPrefix(item.ETag, "W/") {
-		// If the item ETag is weak,
+	if strings.HasPrefix(item.ETag, "p-") {
+		// If the item ETag is in "p-[id]" format,
 		// then _etag field must be absent from the resource in DB
 		s["_etag"] = bson.M{"$exists": false}
 	} else {
