@@ -63,9 +63,9 @@ func translatePredicate(q query.Predicate) (bson.M, error) {
 			}
 			b["$or"] = s
 		case query.In:
-			b[getField(t.Field)] = bson.M{"$in": valuesToInterface(t.Values)}
+			b[getField(t.Field)] = bson.M{"$in": t.Values}
 		case query.NotIn:
-			b[getField(t.Field)] = bson.M{"$nin": valuesToInterface(t.Values)}
+			b[getField(t.Field)] = bson.M{"$nin": t.Values}
 		case query.Exist:
 			b[getField(t.Field)] = bson.M{"$exists": true}
 		case query.NotExist:
@@ -89,12 +89,4 @@ func translatePredicate(q query.Predicate) (bson.M, error) {
 		}
 	}
 	return b, nil
-}
-
-func valuesToInterface(v []query.Value) []interface{} {
-	I := make([]interface{}, len(v))
-	for i, _v := range v {
-		I[i] = _v
-	}
-	return I
 }
