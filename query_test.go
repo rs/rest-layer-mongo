@@ -34,6 +34,8 @@ func TestTranslatePredicate(t *testing.T) {
 		{`{id:"foo"}`, nil, bson.M{"_id": "foo"}},
 		{`{f:"foo"}`, nil, bson.M{"f": "foo"}},
 		{`{f:{$ne:"foo"}}`, nil, bson.M{"f": bson.M{"$ne": "foo"}}},
+		{`{f:{$exists:true}}`, nil, bson.M{"f": bson.M{"$exists": true}}},
+		{`{f:{$exists:false}}`, nil, bson.M{"f": bson.M{"$exists": false}}},
 		{`{f:{$gt:1}}`, nil, bson.M{"f": bson.M{"$gt": float64(1)}}},
 		{`{f:{$gte:1}}`, nil, bson.M{"f": bson.M{"$gte": float64(1)}}},
 		{`{f:{$lt:1}}`, nil, bson.M{"f": bson.M{"$lt": float64(1)}}},
@@ -52,7 +54,7 @@ func TestTranslatePredicate(t *testing.T) {
 				t.Errorf("translatePredicate error:\ngot:  %v\nwant: %v", err, tc.err)
 			}
 			if !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("translatePredicate:\ngot:  %v\nwant: %v", got, tc.want)
+				t.Errorf("translatePredicate:\ngot:  %#v\nwant: %#v", got, tc.want)
 			}
 		})
 	}
