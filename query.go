@@ -66,6 +66,10 @@ func translatePredicate(q query.Predicate) (bson.M, error) {
 			b[getField(t.Field)] = bson.M{"$in": valuesToInterface(t.Values)}
 		case query.NotIn:
 			b[getField(t.Field)] = bson.M{"$nin": valuesToInterface(t.Values)}
+		case query.Exist:
+			b[getField(t.Field)] = bson.M{"$exists": true}
+		case query.NotExist:
+			b[getField(t.Field)] = bson.M{"$exists": false}
 		case query.Equal:
 			b[getField(t.Field)] = t.Value
 		case query.NotEqual:
