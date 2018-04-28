@@ -3,6 +3,7 @@ package mongo
 import (
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema/query"
+	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -16,7 +17,7 @@ func getField(f string) string {
 	return f
 }
 
-// getQuery transform a query into a Mongo query
+// getQuery transform a query into a Mongo query.
 func getQuery(q *query.Query) (bson.M, error) {
 	return translatePredicate(q.Predicate)
 }
@@ -36,6 +37,31 @@ func getSort(q *query.Query) []string {
 		}
 	}
 	return s
+}
+
+func applyWindow(mq *mgo.Query, w query.Window) *mgo.Query {
+	if w.Offset > 0 {
+		mq = mq.Skip(w.Offset)
+	}
+	if w.Limit > -1 {
+		mq = mq.Limit(w.Limit)
+	}
+	return mq
+}
+
+func selectIDs(c *mgo.Collection, mq *mgo.Query) ([]interface{}, error) {
+	var ids []interface{}
+	tmp := struct {
+		ID interface{} `bson:"_id"`
+	}{}
+	it := mq.Select(bson.M{"_id": 1}).Iter()
+	for it.Next(&tmp) {
+		ids = append(ids, tmp.ID)
+	}
+	if err := it.Close(); err != nil {
+		return nil, err
+	}
+	return ids, nil
 }
 
 func translatePredicate(q query.Predicate) (bson.M, error) {
