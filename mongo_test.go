@@ -8,6 +8,7 @@ import (
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema/query"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2"
 )
 
@@ -22,6 +23,13 @@ func cleanup(s *mgo.Session, db string) func() {
 	return func() {
 		s.DB(db).DropDatabase()
 	}
+}
+
+// asserts that the items in a collection matches the provided list of IDs.
+func assertCollectionIDs(t testing.TB, c *mgo.Collection, expect []string) {
+	var ids []string
+	assert.NoError(t, c.Find(nil).Distinct("_id", &ids))
+	assert.EqualValues(t, expect, ids)
 }
 
 func TestInsert(t *testing.T) {
@@ -204,6 +212,11 @@ func TestDelete(t *testing.T) {
 }
 
 func TestClear(t *testing.T) {
+	const (
+		dbName = "testclearlimit"
+		cName  = "test"
+	)
+
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -211,8 +224,8 @@ func TestClear(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	defer cleanup(s, "testupdate")()
-	h := NewHandler(s, "testupdate", "test")
+	defer cleanup(s, dbName)()
+	h := NewHandler(s, dbName, dbName)
 	items := []*resource.Item{
 		{ID: "1", Payload: map[string]interface{}{"id": "1", "name": "a"}},
 		{ID: "2", Payload: map[string]interface{}{"id": "2", "name": "b"}},
@@ -229,6 +242,7 @@ func TestClear(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 2, deleted)
 	}
+	assertCollectionIDs(t, s.DB(dbName).C(dbName), []string{"1", "2"})
 
 	q, err = query.New("", `{id:"2"}`, "", nil)
 	if assert.NoError(t, err) {
@@ -236,6 +250,74 @@ func TestClear(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, deleted)
 	}
+	assertCollectionIDs(t, s.DB(dbName).C(dbName), []string{"1"})
+}
+func TestClearLimit(t *testing.T) {
+	const (
+		dbName = "testclearlimit"
+		cName  = "test"
+	)
+
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+	s, err := mgo.Dial("")
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer cleanup(s, dbName)()
+	h := NewHandler(s, dbName, cName)
+	items := []*resource.Item{
+		{ID: "1", Payload: map[string]interface{}{"id": "1", "name": "a"}},
+		{ID: "2", Payload: map[string]interface{}{"id": "2", "name": "b"}},
+		{ID: "3", Payload: map[string]interface{}{"id": "3", "name": "d"}}, // should be sorted after 4
+		{ID: "4", Payload: map[string]interface{}{"id": "4", "name": "c"}}, // should be removed
+	}
+
+	err = h.Insert(context.Background(), items)
+	require.NoError(t, err)
+
+	q, err := query.New("", `{name:{$in:["c","d"]}}`, "name", &query.Window{Limit: 1})
+	if assert.NoError(t, err) {
+		deleted, err := h.Clear(context.Background(), q)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, deleted)
+	}
+	assertCollectionIDs(t, s.DB(dbName).C(cName), []string{"1", "2", "3"})
+}
+
+func TestClearOffset(t *testing.T) {
+	const (
+		dbName = "testclearoffset"
+		cName  = "test"
+	)
+
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+	s, err := mgo.Dial("")
+	if !assert.NoError(t, err) {
+		return
+	}
+	defer cleanup(s, dbName)()
+	h := NewHandler(s, dbName, cName)
+	items := []*resource.Item{
+		{ID: "1", Payload: map[string]interface{}{"id": "1", "name": "a"}},
+		{ID: "2", Payload: map[string]interface{}{"id": "2", "name": "b"}},
+		{ID: "3", Payload: map[string]interface{}{"id": "3", "name": "d"}}, // should be sorted after 4, should be removed
+		{ID: "4", Payload: map[string]interface{}{"id": "4", "name": "c"}}, // should be skipped
+	}
+
+	err = h.Insert(context.Background(), items)
+	require.NoError(t, err)
+
+	q, err := query.New("", `{name:{$in:["c","d"]}}`, "name", &query.Window{Offset: 1})
+	if assert.NoError(t, err) {
+		deleted, err := h.Clear(context.Background(), q)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, deleted)
+	}
+	assertCollectionIDs(t, s.DB(dbName).C(cName), []string{"1", "2", "4"})
 }
 
 func TestFind(t *testing.T) {

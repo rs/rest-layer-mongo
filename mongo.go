@@ -13,7 +13,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-// mongoItem is a bson representation of a resource.Item
+// mongoItem is a bson representation of a resource.Item.
 type mongoItem struct {
 	ID      interface{}            `bson:"_id"`
 	ETag    string                 `bson:"_etag"`
@@ -21,7 +21,7 @@ type mongoItem struct {
 	Payload map[string]interface{} `bson:",inline"`
 }
 
-// newMongoItem converts a resource.Item into a mongoItem
+// newMongoItem converts a resource.Item into a mongoItem.
 func newMongoItem(i *resource.Item) *mongoItem {
 	// Filter out id from the payload so we don't store it twice
 	p := map[string]interface{}{}
@@ -38,7 +38,7 @@ func newMongoItem(i *resource.Item) *mongoItem {
 	}
 }
 
-// newItem converts a back mongoItem into a resource.Item
+// newItem converts a back mongoItem into a resource.Item.
 func newItem(i *mongoItem) *resource.Item {
 	// Add the id back (we use the same map hoping the mongoItem won't be stored back)
 	i.Payload["id"] = i.ID
@@ -104,7 +104,7 @@ func (m Handler) close(c *mgo.Collection) {
 	c.Database.Session.Close()
 }
 
-// Insert inserts new items in the mongo collection
+// Insert inserts new items in the mongo collection.
 func (m Handler) Insert(ctx context.Context, items []*resource.Item) error {
 	mItems := make([]interface{}, len(items))
 	for i, item := range items {
@@ -126,7 +126,7 @@ func (m Handler) Insert(ctx context.Context, items []*resource.Item) error {
 	return err
 }
 
-// Update replace an item by a new one in the mongo collection
+// Update replace an item by a new one in the mongo collection.
 func (m Handler) Update(ctx context.Context, item *resource.Item, original *resource.Item) error {
 	mItem := newMongoItem(item)
 	c, err := m.c(ctx)
@@ -161,7 +161,7 @@ func (m Handler) Update(ctx context.Context, item *resource.Item, original *reso
 	return err
 }
 
-// Delete deletes an item from the mongo collection
+// Delete deletes an item from the mongo collection.
 func (m Handler) Delete(ctx context.Context, item *resource.Item) error {
 	c, err := m.c(ctx)
 	if err != nil {
@@ -195,30 +195,57 @@ func (m Handler) Delete(ctx context.Context, item *resource.Item) error {
 	return err
 }
 
-// Clear clears all items from the mongo collection matching the query
+// Clear clears all items from the mongo collection matching the query. Note
+// that when q.Window != nil, the current implementation may error if the BSON
+// encoding of all matching IDs according to the q.Window length gets close to
+// the maximum document size in MongDB (usually 16MiB):
+// https://docs.mongodb.com/manual/reference/limits/#bson-documents
 func (m Handler) Clear(ctx context.Context, q *query.Query) (int, error) {
+	// When not applying windowing, qry will be passed directly to RemoveAll.
 	qry, err := getQuery(q)
 	if err != nil {
 		return 0, err
 	}
+
 	c, err := m.c(ctx)
 	if err != nil {
 		return 0, err
 	}
 	defer m.close(c)
+
+	if q.Window != nil {
+		// RemoveAll does not allow skip and limit to be set. To workaround
+		// this we do an additional pre-query to retrieve a sorted and sliced
+		// list of the IDs for all items to be deleted.
+		//
+		// This solution does not handle the case where a query containg all
+		// IDs is larger than the maximum BSON document size in MongoDB:
+		// https://docs.mongodb.com/manual/reference/limits/#bson-documents
+		srt := getSort(q)
+		mq := applyWindow(c.Find(qry).Sort(srt...), *q.Window)
+
+		if ids, err := selectIDs(c, mq); err == nil {
+			qry = bson.M{"_id": bson.M{"$in": ids}}
+		} else {
+			return 0, err
+		}
+	}
+
+	// We handle the potential of partial failure by returning both the number
+	// of removed items and an error, if both are present.
 	info, err := c.RemoveAll(qry)
-	if err != nil {
+	if err == nil {
+		err = ctx.Err()
+	}
+	if info == nil {
 		return 0, err
 	}
-	if ctx.Err() != nil {
-		return 0, ctx.Err()
-	}
-	return info.Removed, nil
+	return info.Removed, err
 }
 
-// Find items from the mongo collection matching the provided query
+// Find items from the mongo collection matching the provided query.
 func (m Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, error) {
-	// MongoDB will return all records on Limit=0. Workaround that behaviour.
+	// MongoDB will return all records on Limit=0. Workaround that behavior.
 	// https://docs.mongodb.com/manual/reference/method/cursor.limit/#zero-value
 	if q.Window != nil && q.Window.Limit == 0 {
 		n, err := m.Count(ctx, q)
@@ -232,29 +259,26 @@ func (m Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 		}
 		return list, err
 	}
+
 	qry, err := getQuery(q)
 	if err != nil {
 		return nil, err
 	}
 	srt := getSort(q)
+
 	c, err := m.c(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer m.close(c)
-	var mItem mongoItem
-	mq := c.Find(qry).Sort(srt...)
 
+	mq := c.Find(qry).Sort(srt...)
 	limit := -1
 	if q.Window != nil {
+		mq = applyWindow(mq, *q.Window)
 		limit = q.Window.Limit
-		if q.Window.Offset > 0 {
-			mq.Skip(q.Window.Offset)
-		}
-		if q.Window.Limit >= 0 {
-			mq.Limit(q.Window.Limit)
-		}
 	}
+
 	// Apply context deadline if any
 	if dl, ok := ctx.Deadline(); ok {
 		dur := dl.Sub(time.Now())
@@ -263,6 +287,7 @@ func (m Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 		}
 		mq.SetMaxTime(dur)
 	}
+
 	// Perform request
 	iter := mq.Iter()
 	// Total is set to -1 because we have no easy way with MongoDB to to compute
@@ -272,6 +297,8 @@ func (m Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 		Limit: limit,
 		Items: []*resource.Item{},
 	}
+
+	var mItem mongoItem
 	for iter.Next(&mItem) {
 		// Check if context is still ok before to continue
 		if err = ctx.Err(); err != nil {
