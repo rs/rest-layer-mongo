@@ -40,6 +40,11 @@ func newMongoItem(i *resource.Item) *mongoItem {
 
 // newItem converts a back mongoItem into a resource.Item.
 func newItem(i *mongoItem) *resource.Item {
+	// If there is no field except those defined in mongoItem, Payload could be nil
+	// when just fetched from the database.
+	if i.Payload == nil {
+		i.Payload = make(map[string]interface{})
+	}
 	// Add the id back (we use the same map hoping the mongoItem won't be stored back)
 	i.Payload["id"] = i.ID
 	item := &resource.Item{
