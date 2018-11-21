@@ -17,7 +17,7 @@ func (u UnsupportedExpression) Match(p map[string]interface{}) bool {
 	return false
 }
 
-func (u UnsupportedExpression) Validate(v schema.Validator) error {
+func (u UnsupportedExpression) Prepare(v schema.Validator) error {
 	return nil
 }
 
@@ -64,9 +64,9 @@ func TestTranslatePredicateInvalid(t *testing.T) {
 	var err error
 	_, err = translatePredicate(query.Predicate{UnsupportedExpression{}})
 	assert.Equal(t, resource.ErrNotImplemented, err)
-	_, err = translatePredicate(query.Predicate{query.And{UnsupportedExpression{}}})
+	_, err = translatePredicate(query.Predicate{&query.And{UnsupportedExpression{}}})
 	assert.Equal(t, resource.ErrNotImplemented, err)
-	_, err = translatePredicate(query.Predicate{query.Or{UnsupportedExpression{}}})
+	_, err = translatePredicate(query.Predicate{&query.Or{UnsupportedExpression{}}})
 	assert.Equal(t, resource.ErrNotImplemented, err)
 }
 
