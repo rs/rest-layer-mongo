@@ -68,9 +68,9 @@ func translatePredicate(q query.Predicate) (bson.M, error) {
 	b := bson.M{}
 	for _, exp := range q {
 		switch t := exp.(type) {
-		case query.And:
+		case *query.And:
 			s := []bson.M{}
-			for _, subExp := range t {
+			for _, subExp := range *t {
 				sb, err := translatePredicate(query.Predicate{subExp})
 				if err != nil {
 					return nil, err
@@ -78,9 +78,9 @@ func translatePredicate(q query.Predicate) (bson.M, error) {
 				s = append(s, sb)
 			}
 			b["$and"] = s
-		case query.Or:
+		case *query.Or:
 			s := []bson.M{}
-			for _, subExp := range t {
+			for _, subExp := range *t {
 				sb, err := translatePredicate(query.Predicate{subExp})
 				if err != nil {
 					return nil, err
@@ -88,27 +88,27 @@ func translatePredicate(q query.Predicate) (bson.M, error) {
 				s = append(s, sb)
 			}
 			b["$or"] = s
-		case query.In:
+		case *query.In:
 			b[getField(t.Field)] = bson.M{"$in": t.Values}
-		case query.NotIn:
+		case *query.NotIn:
 			b[getField(t.Field)] = bson.M{"$nin": t.Values}
-		case query.Exist:
+		case *query.Exist:
 			b[getField(t.Field)] = bson.M{"$exists": true}
-		case query.NotExist:
+		case *query.NotExist:
 			b[getField(t.Field)] = bson.M{"$exists": false}
-		case query.Equal:
+		case *query.Equal:
 			b[getField(t.Field)] = t.Value
-		case query.NotEqual:
+		case *query.NotEqual:
 			b[getField(t.Field)] = bson.M{"$ne": t.Value}
-		case query.GreaterThan:
+		case *query.GreaterThan:
 			b[getField(t.Field)] = bson.M{"$gt": t.Value}
-		case query.GreaterOrEqual:
+		case *query.GreaterOrEqual:
 			b[getField(t.Field)] = bson.M{"$gte": t.Value}
-		case query.LowerThan:
+		case *query.LowerThan:
 			b[getField(t.Field)] = bson.M{"$lt": t.Value}
-		case query.LowerOrEqual:
+		case *query.LowerOrEqual:
 			b[getField(t.Field)] = bson.M{"$lte": t.Value}
-		case query.Regex:
+		case *query.Regex:
 			b[getField(t.Field)] = bson.M{"$regex": t.Value.String()}
 		default:
 			return nil, resource.ErrNotImplemented
