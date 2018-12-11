@@ -1,9 +1,18 @@
 language: go
 go:
-- 1.9
-- tip
+  - 1.11
+  - tip
 env:
+  - GO111MODULE=on
+cache:
+  directories:
+    - $HOME/.cache/go-build
+    - $HOME/gopath/pkg/mod
+matrix:
   allow_failures:
     - go: tip
+script:
+  - go build ./...
+  - go test -v -race -cpu=1,2,4 ./...
 services:
   - mongodb

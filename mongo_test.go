@@ -1,19 +1,46 @@
-package mongo
+package mongo_test
 
 import (
 	"context"
+	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 
+	mongo "github.com/rs/rest-layer-mongo"
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema/query"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"gopkg.in/mgo.v2"
+	mgo "gopkg.in/mgo.v2"
 )
 
 // Mongo doesn't support nanoseconds
 var now = time.Now().Round(time.Millisecond)
+
+func init() {
+	rand.Seed(now.UnixNano())
+}
+
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyz")
+
+func randomName(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+func setupDBTest(t *testing.T) (*mgo.Session, func()) {
+	dbName := randomName(16)
+	if testing.Short() {
+		t.Skip("skipping DB test in short mode.")
+	}
+	s, err := mgo.Dial("mongodb:///" + dbName)
+	if err != nil {
+		t.Fatal("Unexpected error for mgo.Dial:", err)
+	}
+	return s, cleanup(s, dbName)
+}
 
 // cleanup deletes a database immediately and on defer when call as:
 //
@@ -27,21 +54,21 @@ func cleanup(s *mgo.Session, db string) func() {
 
 // asserts that the items in a collection matches the provided list of IDs.
 func assertCollectionIDs(t testing.TB, c *mgo.Collection, expect []string) {
-	var ids []string
-	assert.NoError(t, c.Find(nil).Distinct("_id", &ids))
-	assert.EqualValues(t, expect, ids)
+	t.Helper()
+
+	var result []string
+	if err := c.Find(nil).Distinct("_id", &result); err != nil {
+		t.Errorf("Unexpected error for Collection.Find: %v", err)
+	}
+	if !reflect.DeepEqual(result, expect) {
+		t.Errorf("Unexpected IDs inserted;  got: %v want: %v", result, expect)
+	}
 }
 
 func TestInsert(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-	s, err := mgo.Dial("")
-	if !assert.NoError(t, err) {
-		return
-	}
-	defer cleanup(s, "testinsert")()
-	h := NewHandler(s, "testinsert", "test")
+	s, cleanup := setupDBTest(t)
+	defer cleanup()
+	h := mongo.NewHandler(s, "", "test")
 	items := []*resource.Item{
 		{
 			ID:      "1234",
@@ -53,39 +80,30 @@ func TestInsert(t *testing.T) {
 			},
 		},
 	}
-	err = h.Insert(context.Background(), items)
-	assert.NoError(t, err)
-	d := map[string]interface{}{}
-	err = s.DB("testinsert").C("test").FindId("1234").One(&d)
-	if !assert.NoError(t, err) {
-		return
+	if err := h.Insert(context.Background(), items); err != nil {
+		t.Fatal(err)
 	}
-	assert.Equal(t, map[string]interface{}{"foo": "bar", "_id": "1234", "_etag": "etag", "_updated": now}, d)
+
+	result := map[string]interface{}{}
+	if err := s.DB("").C("test").FindId("1234").One(&result); err != nil {
+		t.Fatal(err)
+	}
+	expect := map[string]interface{}{"foo": "bar", "_id": "1234", "_etag": "etag", "_updated": now}
+	if !reflect.DeepEqual(expect, result) {
+		t.Errorf("got: %v want: %v", result, expect)
+	}
 
 	// Inserting same item twice should return a conflict error
-	err = h.Insert(context.Background(), items)
-	assert.Equal(t, resource.ErrConflict, err)
+	err := h.Insert(context.Background(), items)
+	if result, expect := err, resource.ErrConflict; result != expect {
+		t.Errorf("got: %v want: %v", result, expect)
+	}
+
 }
 
 func TestUpdate(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-	s, err := mgo.Dial("")
-	if !assert.NoError(t, err) {
-		return
-	}
-	defer cleanup(s, "testupdate")()
-	h := NewHandler(s, "testupdate", "test")
-	oldItem := &resource.Item{
-		ID:      "1234",
-		ETag:    "etag1",
-		Updated: now,
-		Payload: map[string]interface{}{
-			"id":  "1234",
-			"foo": "bar",
-		},
-	}
+	now := time.Now().Truncate(time.Millisecond)
+
 	newItem := &resource.Item{
 		ID:      "1234",
 		ETag:    "etag2",
@@ -95,70 +113,135 @@ func TestUpdate(t *testing.T) {
 			"foo": "baz",
 		},
 	}
-
-	// Can't update a non existing item
-	err = h.Update(context.Background(), newItem, oldItem)
-	assert.Equal(t, resource.ErrNotFound, err)
-
-	err = h.Insert(context.Background(), []*resource.Item{oldItem})
-	assert.NoError(t, err)
-	err = h.Update(context.Background(), newItem, oldItem)
-	assert.NoError(t, err)
-
-	// Update refused if original item's etag doesn't match stored one
-	err = h.Update(context.Background(), newItem, oldItem)
-	assert.Equal(t, resource.ErrConflict, err)
-
-	c := s.DB("testupdate").C("testEtag")
-	// Add an item without _etag field
-	c.Insert(map[string]interface{}{"foo": "bar", "_id": "1234", "_updated": now})
-	h2 := NewHandler(s, "testupdate", "testEtag")
-	// A item without _etag field, is extracted with ETag in "p-[id]" format
-	originalItem := &resource.Item{
-		ID:      "1234",
-		ETag:    "p-1234",
-		Updated: now,
-		Payload: map[string]interface{}{
-			"id":  "1234",
-			"foo": "baz",
-		},
+	newItemDoc := map[string]interface{}{
+		"_id":      "1234",
+		"_etag":    "etag2",
+		"_updated": now,
+		"foo":      "baz",
 	}
-	item := &resource.Item{
-		ID:      "1234",
-		ETag:    "etag",
-		Updated: now,
-		Payload: map[string]interface{}{
-			"id":  "1234",
-			"foo": "baz",
-		},
-	}
-	// Update an original item with Etag over item in DB without _etag
-	err = h2.Update(context.Background(), item, originalItem)
-	assert.NoError(t, err)
 
-	d := map[string]interface{}{}
-	err = s.DB("testupdate").C("testEtag").FindId("1234").One(&d)
-	if !assert.NoError(t, err) {
-		return
-	}
-	assert.Equal(t, map[string]interface{}{"foo": "baz", "_id": "1234", "_etag": "etag", "_updated": now}, d)
+	t.Run("when updating a non-existing item", func(t *testing.T) {
+		oldItem := &resource.Item{
+			ID:      "1234",
+			ETag:    "etag1",
+			Updated: now,
+			Payload: map[string]interface{}{
+				"id":  "1234",
+				"foo": "bar",
+			},
+		}
 
-	// Update an original item with ETag over item in DB with _etag,
-	// fails because _etag is present
-	err = h.Update(context.Background(), item, originalItem)
-	assert.Equal(t, resource.ErrConflict, err)
+		s, cleanup := setupDBTest(t)
+		defer cleanup()
+		h := mongo.NewHandler(s, "", "test")
+
+		err := h.Update(context.Background(), newItem, oldItem)
+
+		t.Run("should error", func(t *testing.T) {
+			if result, expect := err, resource.ErrNotFound; result != expect {
+				t.Errorf("got: %v want: %v", result, expect)
+			}
+		})
+	})
+
+	t.Run("when updating an existing item", func(t *testing.T) {
+		oldItem := &resource.Item{
+			ID:      "1234",
+			ETag:    "etag1",
+			Updated: now,
+			Payload: map[string]interface{}{
+				"id":  "1234",
+				"foo": "bar",
+			},
+		}
+
+		s, cleanup := setupDBTest(t)
+		defer cleanup()
+		h := mongo.NewHandler(s, "", "test")
+
+		if err := h.Insert(context.Background(), []*resource.Item{oldItem}); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := h.Update(context.Background(), newItem, oldItem); err != nil {
+			t.Fatal(err)
+		}
+
+		t.Run("then should have updated the item", func(t *testing.T) {
+			result := map[string]interface{}{}
+
+			if err := s.DB("").C("test").FindId("1234").One(&result); err != nil {
+				t.Fatal(err)
+			}
+
+			if expect := newItemDoc; !reflect.DeepEqual(result, expect) {
+				t.Errorf("\ngot: %v\nwant: %v", result, expect)
+			}
+		})
+
+		t.Run("when attempting the same update again", func(t *testing.T) {
+			err := h.Update(context.Background(), newItem, oldItem)
+
+			t.Run("then should return a conflict due to mismatching E-tags", func(t *testing.T) {
+				if result, expect := err, resource.ErrConflict; result != expect {
+					t.Errorf("got %v want %v", result, expect)
+				}
+			})
+		})
+	})
+
+	t.Run("when updating an item that doesn't have an E-Tag set in the DB", func(t *testing.T) {
+		oldItem := &resource.Item{
+			ID:      "1234",
+			ETag:    "p-1234", // Provisional E-tag contains the ID prefixed by "p-"
+			Updated: now,
+			Payload: map[string]interface{}{
+				"id":  "1234",
+				"foo": "baz",
+			},
+		}
+
+		s, cleanup := setupDBTest(t)
+		defer cleanup()
+		h := mongo.NewHandler(s, "", "test")
+
+		// Inserting directly to the database without setting the _etag field.
+		if err := s.DB("").C("test").Insert(map[string]interface{}{"foo": "bar", "_id": "1234", "_updated": now}); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := h.Update(context.Background(), newItem, oldItem); err != nil {
+			t.Fatal(err)
+		}
+
+		t.Run("then should have updated the item", func(t *testing.T) {
+			result := map[string]interface{}{}
+
+			if err := s.DB("").C("test").FindId("1234").One(&result); err != nil {
+				t.Fatal(err)
+			}
+
+			if expect := newItemDoc; !reflect.DeepEqual(result, expect) {
+				t.Errorf("\ngot: %v\nwant: %v", result, expect)
+			}
+		})
+
+		t.Run("when attempting the same update again", func(t *testing.T) {
+			err := h.Update(context.Background(), newItem, oldItem)
+
+			t.Run("then should return a conflict due to mismatching E-tags", func(t *testing.T) {
+				if result, expect := err, resource.ErrConflict; result != expect {
+					t.Errorf("got %v want %v", result, expect)
+				}
+			})
+		})
+	})
 }
 
 func TestDelete(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-	s, err := mgo.Dial("")
-	if !assert.NoError(t, err) {
-		return
-	}
-	defer cleanup(s, "testupdate")()
-	h := NewHandler(s, "testupdate", "test")
+	s, cleanup := setupDBTest(t)
+	defer cleanup()
+	h := mongo.NewHandler(s, "", "test")
 	item := &resource.Item{
 		ID:      "1234",
 		ETag:    "etag1",
@@ -170,26 +253,36 @@ func TestDelete(t *testing.T) {
 	}
 
 	// Can't delete a non existing item
-	err = h.Delete(context.Background(), item)
-	assert.Equal(t, resource.ErrNotFound, err)
+	err := h.Delete(context.Background(), item)
+	if got, expect := err, resource.ErrNotFound; got != expect {
+		t.Errorf("got: %v\nwant: %v\n", got, expect)
+	}
 
 	err = h.Insert(context.Background(), []*resource.Item{item})
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = h.Delete(context.Background(), item)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Update refused if original item's etag doesn't match stored one
 	err = h.Insert(context.Background(), []*resource.Item{item})
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	item.ETag = "etag2"
 	err = h.Delete(context.Background(), item)
-	assert.Equal(t, resource.ErrConflict, err)
+	if got, expect := err, resource.ErrConflict; got != expect {
+		t.Errorf("got %v want: %v", got, expect)
+	}
 
-	c := s.DB("testupdate").C("testEtag")
+	c := s.DB("").C("testEtag")
 	// Add an item without _etag field
 	c.Insert(map[string]interface{}{"foo": "bar", "_id": "1234", "_updated": now})
 	c.Insert(map[string]interface{}{"foo": "bar", "_id": "12345", "_etag": "etag", "_updated": now})
-	h2 := NewHandler(s, "testupdate", "testEtag")
+	h2 := mongo.NewHandler(s, "", "testEtag")
 	// A item without _etag field, is extracted with ETag in "p-[id]" format
 	originalItem := &resource.Item{
 		ID:      "1234",
@@ -202,55 +295,62 @@ func TestDelete(t *testing.T) {
 	}
 	// Delete an original item with Etag over item in DB without _etag
 	err = h2.Delete(context.Background(), originalItem)
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	originalItem.ID = "12345"
 	// Delete an original item with Etag over item in DB with _etag
 	// fails because _etag is present
 	err = h2.Delete(context.Background(), originalItem)
-	assert.Equal(t, resource.ErrConflict, err)
+	if got, expect := err, resource.ErrConflict; got != expect {
+		t.Errorf("got: %v want: %v", got, expect)
+	}
 }
 
 func TestClear(t *testing.T) {
 	const (
-		dbName = "testclearlimit"
-		cName  = "test"
+		cName = "test"
 	)
 
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-	s, err := mgo.Dial("")
-	if !assert.NoError(t, err) {
-		return
-	}
-	defer cleanup(s, dbName)()
-	h := NewHandler(s, dbName, dbName)
+	s, cleanup := setupDBTest(t)
+	defer cleanup()
+	h := mongo.NewHandler(s, "", cName)
 	items := []*resource.Item{
 		{ID: "1", Payload: map[string]interface{}{"id": "1", "name": "a"}},
 		{ID: "2", Payload: map[string]interface{}{"id": "2", "name": "b"}},
 		{ID: "3", Payload: map[string]interface{}{"id": "3", "name": "c"}},
 		{ID: "4", Payload: map[string]interface{}{"id": "4", "name": "d"}},
 	}
-
-	err = h.Insert(context.Background(), items)
-	assert.NoError(t, err)
+	if err := h.Insert(context.Background(), items); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
 
 	q, err := query.New("", `{name:{$in:["c","d"]}}`, "", nil)
-	if assert.NoError(t, err) {
-		deleted, err := h.Clear(context.Background(), q)
-		assert.NoError(t, err)
-		assert.Equal(t, 2, deleted)
+	if err != nil {
+		t.Fatal(err)
 	}
-	assertCollectionIDs(t, s.DB(dbName).C(dbName), []string{"1", "2"})
+	deleted, err := h.Clear(context.Background(), q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expect := 2; deleted != expect {
+		t.Errorf("Unexpected result:\nexpect: %#v\ngot: %#v", expect, deleted)
+	}
+	assertCollectionIDs(t, s.DB("").C(cName), []string{"1", "2"})
 
 	q, err = query.New("", `{id:"2"}`, "", nil)
-	if assert.NoError(t, err) {
-		deleted, err := h.Clear(context.Background(), q)
-		assert.NoError(t, err)
-		assert.Equal(t, 1, deleted)
+	if err != nil {
+		t.Fatal(err)
 	}
-	assertCollectionIDs(t, s.DB(dbName).C(dbName), []string{"1"})
+	deleted, err = h.Clear(context.Background(), q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expect := 1; deleted != expect {
+		t.Errorf("Unexpected result:\nexpect: %#v\ngot: %#v", expect, deleted)
+	}
+	assertCollectionIDs(t, s.DB("").C(cName), []string{"1"})
 }
 func TestClearLimit(t *testing.T) {
 	const (
@@ -258,192 +358,254 @@ func TestClearLimit(t *testing.T) {
 		cName  = "test"
 	)
 
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-	s, err := mgo.Dial("")
-	if !assert.NoError(t, err) {
-		return
-	}
-	defer cleanup(s, dbName)()
-	h := NewHandler(s, dbName, cName)
+	s, cleanup := setupDBTest(t)
+	defer cleanup()
+
+	h := mongo.NewHandler(s, "", cName)
 	items := []*resource.Item{
 		{ID: "1", Payload: map[string]interface{}{"id": "1", "name": "a"}},
 		{ID: "2", Payload: map[string]interface{}{"id": "2", "name": "b"}},
 		{ID: "3", Payload: map[string]interface{}{"id": "3", "name": "d"}}, // should be sorted after 4
 		{ID: "4", Payload: map[string]interface{}{"id": "4", "name": "c"}}, // should be removed
 	}
-
-	err = h.Insert(context.Background(), items)
-	require.NoError(t, err)
+	if err := h.Insert(context.Background(), items); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
 
 	q, err := query.New("", `{name:{$in:["c","d"]}}`, "name", &query.Window{Limit: 1})
-	if assert.NoError(t, err) {
-		deleted, err := h.Clear(context.Background(), q)
-		assert.NoError(t, err)
-		assert.Equal(t, 1, deleted)
+	if err != nil {
+		t.Fatal(err)
 	}
-	assertCollectionIDs(t, s.DB(dbName).C(cName), []string{"1", "2", "3"})
+	deleted, err := h.Clear(context.Background(), q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expect := 1; deleted != expect {
+		t.Errorf("Unexpected result:\nexpect: %#v\ngot: %#v", expect, deleted)
+	}
+	assertCollectionIDs(t, s.DB("").C(cName), []string{"1", "2", "3"})
 }
 
 func TestClearOffset(t *testing.T) {
 	const (
-		dbName = "testclearoffset"
-		cName  = "test"
+		cName = "test"
 	)
 
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-	s, err := mgo.Dial("")
-	if !assert.NoError(t, err) {
-		return
-	}
-	defer cleanup(s, dbName)()
-	h := NewHandler(s, dbName, cName)
+	s, cleanup := setupDBTest(t)
+	defer cleanup()
+	h := mongo.NewHandler(s, "", cName)
 	items := []*resource.Item{
 		{ID: "1", Payload: map[string]interface{}{"id": "1", "name": "a"}},
 		{ID: "2", Payload: map[string]interface{}{"id": "2", "name": "b"}},
 		{ID: "3", Payload: map[string]interface{}{"id": "3", "name": "d"}}, // should be sorted after 4, should be removed
 		{ID: "4", Payload: map[string]interface{}{"id": "4", "name": "c"}}, // should be skipped
 	}
-
-	err = h.Insert(context.Background(), items)
-	require.NoError(t, err)
+	if err := h.Insert(context.Background(), items); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
 
 	q, err := query.New("", `{name:{$in:["c","d"]}}`, "name", &query.Window{Offset: 1})
-	if assert.NoError(t, err) {
-		deleted, err := h.Clear(context.Background(), q)
-		assert.NoError(t, err)
-		assert.Equal(t, 1, deleted)
+	if err != nil {
+		t.Fatal(err)
 	}
-	assertCollectionIDs(t, s.DB(dbName).C(cName), []string{"1", "2", "4"})
+	deleted, err := h.Clear(context.Background(), q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expect := 1; deleted != expect {
+		t.Errorf("Unexpected result:\nexpect: %#v\ngot: %#v", expect, deleted)
+	}
+	assertCollectionIDs(t, s.DB("").C(cName), []string{"1", "2", "4"})
 }
 
 func TestFind(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-	s, err := mgo.Dial("")
-	if !assert.NoError(t, err) {
-		return
-	}
-	defer cleanup(s, "testfind")()
-	h := NewHandler(s, "testfind", "test")
-	h2 := NewHandler(s, "testfind", "test2")
-	items := []*resource.Item{
+	allItems := []*resource.Item{
 		{ID: "1", Payload: map[string]interface{}{"id": "1", "name": "a", "age": 1}},
 		{ID: "2", Payload: map[string]interface{}{"id": "2", "name": "b", "age": 2}},
 		{ID: "3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
 		{ID: "4", Payload: map[string]interface{}{"id": "4", "name": "d", "age": 4}},
 		{ID: "5", Payload: map[string]interface{}{"id": "5", "name": "rest-layer-regexp"}},
 	}
-	ctx := context.Background()
-	assert.NoError(t, h.Insert(ctx, items))
-	assert.NoError(t, h2.Insert(ctx, items))
+	doPositiveFindTest := func(t *testing.T, h mongo.Handler, q *query.Query) *resource.ItemList {
+		l, err := h.Find(context.Background(), q)
 
-	l, err := h.Find(ctx, &query.Query{})
-	if assert.NoError(t, err) {
-		assert.Equal(t, 5, l.Total)
-		assert.Len(t, l.Items, 5)
-		// Do not check result's content as its order is unpredictable
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if l == nil {
+			t.Fatal("Unexpected nil result for Handler.Find")
+		}
+		return l
 	}
+	totalCheckFunc := func(expect int, list *resource.ItemList) func(t *testing.T) {
+		return func(t *testing.T) {
+			t.Helper()
 
-	l, err = h.Find(ctx, &query.Query{Window: &query.Window{Limit: 0}})
-	if assert.NoError(t, err) {
-		assert.Equal(t, 5, l.Total)
-		assert.Len(t, l.Items, 0)
+			if result := list.Total; result != expect {
+				t.Errorf("got: %d want: %d", result, expect)
+			}
+		}
 	}
-
-	l, err = h.Find(ctx, &query.Query{Window: &query.Window{Limit: -1, Offset: 2}})
-	if assert.NoError(t, err) {
-		assert.Equal(t, 5, l.Total)
-		assert.Len(t, l.Items, 3)
+	itemsCheckLenFunc := func(expect int, list *resource.ItemList) func(t *testing.T) {
+		return func(t *testing.T) {
+			t.Helper()
+			if result := len(list.Items); result != expect {
+				t.Errorf("got: %d want: %d", result, expect)
+			}
+		}
 	}
+	itemsCheckFunc := func(expect []*resource.Item, list *resource.ItemList) func(t *testing.T) {
+		return func(t *testing.T) {
+			t.Helper()
 
-	l, err = h.Find(ctx, &query.Query{Window: &query.Window{Limit: -1, Offset: 5}})
-	if assert.NoError(t, err) {
-		assert.Equal(t, -1, l.Total)
-		assert.Len(t, l.Items, 0)
-	}
-
-	l, err = h.Find(ctx, &query.Query{Window: &query.Window{Limit: -1, Offset: 6}})
-	if assert.NoError(t, err) {
-		assert.Equal(t, -1, l.Total)
-		assert.Len(t, l.Items, 0)
-	}
-
-	q, err := query.New("", `{name:"c"}`, "", query.Page(1, 1, 0))
-	if assert.NoError(t, err) {
-		l, err = h.Find(ctx, q)
-		if assert.NoError(t, err) {
-			assert.Equal(t, -1, l.Total)
-			if assert.Len(t, l.Items, 1) {
-				item := l.Items[0]
-				assert.Equal(t, "3", item.ID)
-				assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
-				assert.Equal(t, "p-3", item.ETag)
+			if result := list.Items; !reflect.DeepEqual(result, expect) {
+				t.Errorf("\ngot: %v\nwant: %v\n", result, expect)
 			}
 		}
 	}
 
-	q, err = query.New("", `{name:{$in:["c","d"]}}`, "name", query.Page(1, 100, 0))
-	if assert.NoError(t, err) {
-		l, err = h.Find(ctx, q)
-		if assert.NoError(t, err) {
-			assert.Equal(t, 2, l.Total)
-			if assert.Len(t, l.Items, 2) {
-				item := l.Items[0]
-				assert.Equal(t, "3", item.ID)
-				assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
-				item = l.Items[1]
-				assert.Equal(t, "4", item.ID)
-				assert.Equal(t, map[string]interface{}{"id": "4", "name": "d", "age": 4}, item.Payload)
-			}
-		}
+	s, cleanup := setupDBTest(t)
+	defer cleanup()
+	h := mongo.NewHandler(s, "", "test")
+
+	if err := h.Insert(context.Background(), allItems); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
 	}
 
-	q, err = query.New("", `{id:"3"}`, "", query.Page(1, 1, 0))
-	if assert.NoError(t, err) {
-		l, err = h.Find(ctx, q)
-		if assert.NoError(t, err) {
-			assert.Equal(t, -1, l.Total)
-			if assert.Len(t, l.Items, 1) {
-				item := l.Items[0]
-				assert.Equal(t, "3", item.ID)
-				assert.Equal(t, map[string]interface{}{"id": "3", "name": "c", "age": 3}, item.Payload)
-			}
-		}
-	}
+	t.Run("when using an empty query", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{})
 
-	q, err = query.New("", `{name:{$regex:"^re[s]{1}t-.+yer.+exp$"}}`, "", query.Page(1, 1, 0))
-	if assert.NoError(t, err) {
-		l, err = h.Find(ctx, q)
-		if assert.NoError(t, err) {
-			assert.Equal(t, -1, l.Total)
-			if assert.Len(t, l.Items, 1) {
-				item := l.Items[0]
-				assert.Equal(t, "5", item.ID)
-				assert.Equal(t, map[string]interface{}{"id": "5", "name": "rest-layer-regexp"}, item.Payload)
-			}
-		}
-	}
+		t.Run("then ItemList.Total should count all items", totalCheckFunc(len(allItems), l))
+		t.Run("then ItemList.Items should include all items", itemsCheckLenFunc(len(allItems), l))
+		// Do not check items content as ordering could vary.
+	})
+	t.Run("when setting limit to 0", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{
+			Window: &query.Window{Limit: 0}},
+		)
 
-	q, err = query.New("", `{id:"10"}`, "", query.Page(1, 1, 0))
-	if assert.NoError(t, err) {
-		l, err = h.Find(ctx, q)
-		if assert.NoError(t, err) {
-			assert.Equal(t, 0, l.Total)
-			assert.Len(t, l.Items, 0)
-		}
-	}
+		t.Run("then ItemList.Total should count all items", totalCheckFunc(len(allItems), l))
+		expectItems := []*resource.Item{}
+		t.Run("then ItemList.Items should be an empty list", itemsCheckFunc(expectItems, l))
+	})
+	t.Run("when setting limit -1 and offset to 2", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{
+			Window: &query.Window{Limit: -1, Offset: 2},
+		})
 
-	q, err = query.New("", `{id:{$in:["3","4","10"]}}`, "", nil)
-	if assert.NoError(t, err) {
-		l, err = h.Find(ctx, q)
-		if assert.NoError(t, err) {
-			assert.Equal(t, 2, l.Total)
-			assert.Len(t, l.Items, 2)
+		t.Run("then ItemList.Total should count all items", totalCheckFunc(len(allItems), l))
+
+		t.Run("then ItemList.Items should include all items except the first two", itemsCheckLenFunc(len(allItems)-2, l))
+		// Do not check result's content as its order is unpredictable.
+	})
+	t.Run("when setting limit -1 and offset matching the length of all items", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{
+			Window: &query.Window{Limit: -1, Offset: len(allItems)},
+		})
+
+		// Not able to get total count in one query.
+		t.Run("then ItemList.Total should not be deduced", totalCheckFunc(-1, l))
+		// Check that we get an empty Item list and not nil.
+		expectItems := []*resource.Item{}
+		t.Run("then ItemList.Items should be an empty list", itemsCheckFunc(expectItems, l))
+	})
+
+	t.Run("when setting limit -1 and offset matching the length of all items +1", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{
+			Window: &query.Window{Limit: -1, Offset: len(allItems)},
+		})
+
+		// Not able to get total count in one query.
+		t.Run("then ItemList.Total should not be deduced", totalCheckFunc(-1, l))
+		// Check that we get an empty Item list and not nil.
+		expectItems := []*resource.Item{}
+		t.Run("then ItemList.Items should be an empty list", itemsCheckFunc(expectItems, l))
+	})
+	t.Run("when querying for a specific field value with limit 1", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{
+			Predicate: query.MustParsePredicate(`{name:"c"}`),
+			Window:    &query.Window{Limit: 1, Offset: 0},
+		})
+
+		// Not able to get total count in one query.
+		t.Run("then ItemList.Total should not be deduced", totalCheckFunc(-1, l))
+
+		expectItems := []*resource.Item{
+			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
 		}
-	}
+		t.Run("then ItemList.Items should contain the matching item", itemsCheckFunc(expectItems, l))
+	})
+	t.Run("when querying for a field using the $in operator and limit 100 and a projection", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{
+			Predicate:  query.MustParsePredicate(`{name:{$in:["c","d"]}}`),
+			Window:     &query.Window{Limit: 100, Offset: 0},
+			Projection: query.MustParseProjection("name"),
+		})
+		t.Run("then ItemList.Total should be deduced correctly", totalCheckFunc(2, l))
+
+		expectItems := []*resource.Item{
+			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
+			{ID: "4", ETag: "p-4", Payload: map[string]interface{}{"id": "4", "name": "d", "age": 4}},
+		}
+		t.Run("then ItemList.Items should include all matching items and ignore projection", itemsCheckFunc(expectItems, l))
+	})
+	t.Run("when querying for an existing ID", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{
+			Predicate: query.MustParsePredicate(`{id:"3"}`)},
+		)
+
+		t.Run("then ItemList.Total should be deduced correctly", totalCheckFunc(1, l))
+
+		expectItems := []*resource.Item{
+			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
+		}
+		t.Run("then ItemList.Items should include the matching item", itemsCheckFunc(expectItems, l))
+	})
+	t.Run("when querying using regex", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{
+			Predicate: query.MustParsePredicate(`{name:{$regex:"^re[s]{1}t-.+yer.+exp$"}}`),
+		})
+		t.Run("then ItemList.Total should be deduced correctly", totalCheckFunc(1, l))
+
+		expectItems := []*resource.Item{
+			{ID: "5", ETag: "p-5", Payload: map[string]interface{}{"id": "5", "name": "rest-layer-regexp"}},
+		}
+		t.Run("then ItemList.Items should include the matching item", itemsCheckFunc(expectItems, l))
+	})
+	t.Run("when querying for a non-existant ID with limit 1", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{
+			Predicate: query.MustParsePredicate(`{id:"10"}`),
+			Window:    &query.Window{Limit: 1, Offset: 0},
+		})
+		t.Run("then ItemList.Total should be deduced to 0", totalCheckFunc(0, l))
+		t.Run("then ItemList.Items should be an empty list", itemsCheckFunc([]*resource.Item{}, l))
+	})
+	t.Run("when querying for both existing and non-existant IDs with limit 1", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{
+			Predicate: query.MustParsePredicate(`{id:{$in:["3","4","10"]}}`),
+			Window:    &query.Window{Limit: 1, Offset: 0},
+		})
+
+		// Not able to get total count in one query.
+		t.Run("then ItemList.Total should not be deduced", totalCheckFunc(-1, l))
+
+		expectItems := []*resource.Item{
+			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
+		}
+		t.Run("then ItemList.Items should include the first matching item", itemsCheckFunc(expectItems, l))
+	})
+	t.Run("when querying for both existing and non-existant IDs", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{
+			Predicate: query.MustParsePredicate(`{id:{$in:["3","4","10"]}}`),
+		})
+
+		t.Run("then ItemList.Total should be deduced correctly", totalCheckFunc(2, l))
+
+		expectItems := []*resource.Item{
+			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
+			{ID: "4", ETag: "p-4", Payload: map[string]interface{}{"id": "4", "name": "d", "age": 4}},
+		}
+		t.Run("then ItemList.Items should include all matching items", itemsCheckFunc(expectItems, l))
+	})
 }

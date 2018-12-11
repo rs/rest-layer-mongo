@@ -5,11 +5,12 @@ import (
 	"net/http"
 
 	"github.com/rs/cors"
-	"github.com/rs/rest-layer-mongo"
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/rest"
 	"github.com/rs/rest-layer/schema"
-	"gopkg.in/mgo.v2"
+	mgo "gopkg.in/mgo.v2"
+
+	mongo "github.com/rs/rest-layer-mongo"
 )
 
 var (
