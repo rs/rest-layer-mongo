@@ -7,7 +7,6 @@ import (
 	"github.com/rs/rest-layer/resource"
 	"github.com/rs/rest-layer/schema"
 	"github.com/rs/rest-layer/schema/query"
-	"github.com/stretchr/testify/assert"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -63,23 +62,39 @@ func TestTranslatePredicate(t *testing.T) {
 func TestTranslatePredicateInvalid(t *testing.T) {
 	var err error
 	_, err = translatePredicate(query.Predicate{UnsupportedExpression{}})
-	assert.Equal(t, resource.ErrNotImplemented, err)
+	if resource.ErrNotImplemented != err {
+		t.Errorf("expected ErrNotImplemented, got %v", err)
+	}
 	_, err = translatePredicate(query.Predicate{&query.And{UnsupportedExpression{}}})
-	assert.Equal(t, resource.ErrNotImplemented, err)
+	if resource.ErrNotImplemented != err {
+		t.Errorf("expected ErrNotImplemented, got %v", err)
+	}
 	_, err = translatePredicate(query.Predicate{&query.Or{UnsupportedExpression{}}})
-	assert.Equal(t, resource.ErrNotImplemented, err)
+	if resource.ErrNotImplemented != err {
+		t.Errorf("expected ErrNotImplemented, got %v", err)
+	}
 }
 
 func TestGetSort(t *testing.T) {
 	var s []string
 	s = getSort(&query.Query{Sort: query.Sort{}})
-	assert.Equal(t, []string{"_id"}, s)
+	if expect := []string{"_id"}; !reflect.DeepEqual(expect, s) {
+		t.Errorf("expected %v, got %v", expect, s)
+	}
 	s = getSort(&query.Query{Sort: query.Sort{{Name: "id"}}})
-	assert.Equal(t, []string{"_id"}, s)
+	if expect := []string{"_id"}; !reflect.DeepEqual(expect, s) {
+		t.Errorf("expected %v, got %v", expect, s)
+	}
 	s = getSort(&query.Query{Sort: query.Sort{{Name: "f"}}})
-	assert.Equal(t, []string{"f"}, s)
+	if expect := []string{"f"}; !reflect.DeepEqual(expect, s) {
+		t.Errorf("expected %v, got %v", expect, s)
+	}
 	s = getSort(&query.Query{Sort: query.Sort{{Name: "f", Reversed: true}}})
-	assert.Equal(t, []string{"-f"}, s)
+	if expect := []string{"-f"}; !reflect.DeepEqual(expect, s) {
+		t.Errorf("expected %v, got %v", expect, s)
+	}
 	s = getSort(&query.Query{Sort: query.Sort{{Name: "f"}, {Name: "f", Reversed: true}}})
-	assert.Equal(t, []string{"f", "-f"}, s)
+	if expect := []string{"f", "-f"}; !reflect.DeepEqual(expect, s) {
+		t.Errorf("expected %v, got %v", expect, s)
+	}
 }
