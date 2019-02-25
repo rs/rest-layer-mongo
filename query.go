@@ -88,6 +88,18 @@ func translatePredicate(q query.Predicate) (bson.M, error) {
 				s = append(s, sb)
 			}
 			b["$or"] = s
+		case *query.ElemMatch:
+			s := bson.M{}
+			for _, subExp := range t.Exps {
+				sb, err := translatePredicate(query.Predicate{subExp})
+				if err != nil {
+					return nil, err
+				}
+				for k, v := range sb {
+					s[k] = v
+				}
+			}
+			b[getField(t.Field)] = bson.M{"$elemMatch": s}
 		case *query.In:
 			b[getField(t.Field)] = bson.M{"$in": t.Values}
 		case *query.NotIn:

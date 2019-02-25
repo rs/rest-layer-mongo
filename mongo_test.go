@@ -425,6 +425,12 @@ func TestFind(t *testing.T) {
 		{ID: "3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
 		{ID: "4", Payload: map[string]interface{}{"id": "4", "name": "d", "age": 4}},
 		{ID: "5", Payload: map[string]interface{}{"id": "5", "name": "rest-layer-regexp"}},
+		{ID: "6", Payload: map[string]interface{}{"id": "6", "name": "f",
+			"arr": []interface{}{
+				map[string]interface{}{"a": "foo", "b": "bar"},
+				map[string]interface{}{"a": "foo", "b": "baz"},
+			},
+		}},
 	}
 	doPositiveFindTest := func(t *testing.T, h mongo.Handler, q *query.Query) *resource.ItemList {
 		l, err := h.Find(context.Background(), q)
@@ -607,5 +613,22 @@ func TestFind(t *testing.T) {
 			{ID: "4", ETag: "p-4", Payload: map[string]interface{}{"id": "4", "name": "d", "age": 4}},
 		}
 		t.Run("then ItemList.Items should include all matching items", itemsCheckFunc(expectItems, l))
+	})
+	t.Run("when quering for array of objects match", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{
+			Predicate: query.MustParsePredicate(`{arr:{$elemMatch:{a:"foo"}}}`),
+		})
+
+		t.Run("then ItemList.Total should be deduced correctly", totalCheckFunc(1, l))
+
+		expectItems := []*resource.Item{
+			{ID: "6", ETag: "p-6", Payload: map[string]interface{}{"id": "6", "name": "f",
+				"arr": []interface{}{
+					map[string]interface{}{"a": "foo", "b": "bar"},
+					map[string]interface{}{"a": "foo", "b": "baz"},
+				},
+			}},
+		}
+		t.Run("then ItemList.Items should include the first matching item", itemsCheckFunc(expectItems, l))
 	})
 }
