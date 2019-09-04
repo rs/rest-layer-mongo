@@ -12,8 +12,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/rs/cors v1.6.0 h1:G9tHG9lebljV9mfp9SNPDL36nCDxmo3zTlAf1YgvzmI=
 github.com/rs/cors v1.6.0/go.mod h1:gFx+x8UowdsKA9AchylcLynDq+nNFfI8FkUZdN/jGCU=
-github.com/rs/rest-layer v0.1.1-0.20181202224532-a757914c9271 h1:WxnJFm5qQhJ1njEEKRhwxbfecD4Sp1aicSIQEpGUOnI=
-github.com/rs/rest-layer v0.1.1-0.20181202224532-a757914c9271/go.mod h1:9kR8qjXpkpdgdYawhaKHnx1dscx3frCIGH4PjKqelsI=
+github.com/rs/rest-layer v0.2.0 h1:EdsO+nIt2uxZqF5BiwaXdw4gCqbofPFSTPv1293G48Q=
+github.com/rs/rest-layer v0.2.0/go.mod h1:9kR8qjXpkpdgdYawhaKHnx1dscx3frCIGH4PjKqelsI=
 github.com/rs/xid v1.2.1 h1:mhH9Nq+C1fY2l1XIpgxIiUOfNpRBYH1kKcr+qfKgjRc=
 github.com/rs/xid v1.2.1/go.mod h1:+uKXf+4Djp6Md1KODXJxgGQPKngRmWyn10oCKFzNHOQ=
 github.com/stretchr/testify v1.2.2 h1:bSDNvY7ZPG5RlJ8otE/7V6gMiyenm9RtJ7IUVIAoJ1w=
