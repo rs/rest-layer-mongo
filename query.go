@@ -71,7 +71,8 @@ func translatePredicate(q query.Predicate) (bson.M, error) {
 		case *query.And:
 			s := []bson.M{}
 			for _, subExp := range *t {
-				sb, err := translatePredicate(query.Predicate{subExp})
+				p := expToPredicate(subExp)
+				sb, err := translatePredicate(p)
 				if err != nil {
 					return nil, err
 				}
@@ -81,7 +82,8 @@ func translatePredicate(q query.Predicate) (bson.M, error) {
 		case *query.Or:
 			s := []bson.M{}
 			for _, subExp := range *t {
-				sb, err := translatePredicate(query.Predicate{subExp})
+				p := expToPredicate(subExp)
+				sb, err := translatePredicate(p)
 				if err != nil {
 					return nil, err
 				}
@@ -91,7 +93,8 @@ func translatePredicate(q query.Predicate) (bson.M, error) {
 		case *query.ElemMatch:
 			s := bson.M{}
 			for _, subExp := range t.Exps {
-				sb, err := translatePredicate(query.Predicate{subExp})
+				p := expToPredicate(subExp)
+				sb, err := translatePredicate(p)
 				if err != nil {
 					return nil, err
 				}
@@ -127,4 +130,15 @@ func translatePredicate(q query.Predicate) (bson.M, error) {
 		}
 	}
 	return b, nil
+}
+
+func expToPredicate(exp query.Expression) query.Predicate {
+	switch t := exp.(type) {
+	case query.Predicate:
+		return t
+	case *query.Predicate:
+		return *t
+	default:
+		return query.Predicate{t}
+	}
 }

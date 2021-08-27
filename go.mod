@@ -1,5 +1,7 @@
 module github.com/rs/rest-layer-mongo
 
+go 1.15
+
 require (
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/rs/cors v1.6.0

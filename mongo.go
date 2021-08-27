@@ -93,7 +93,7 @@ func (m Handler) c(ctx context.Context) (*mgo.Collection, error) {
 	s.EnsureSafe(&mgo.Safe{})
 	// Set a timeout to match the context deadline if any
 	if deadline, ok := ctx.Deadline(); ok {
-		timeout := deadline.Sub(time.Now())
+		timeout := time.Until(deadline)
 		if timeout <= 0 {
 			timeout = 0
 		}
@@ -286,7 +286,7 @@ func (m Handler) Find(ctx context.Context, q *query.Query) (*resource.ItemList, 
 
 	// Apply context deadline if any
 	if dl, ok := ctx.Deadline(); ok {
-		dur := dl.Sub(time.Now())
+		dur := time.Until(dl)
 		if dur < 0 {
 			dur = 0
 		}
@@ -346,7 +346,7 @@ func (m Handler) Count(ctx context.Context, query *query.Query) (int, error) {
 	mq := c.Find(q)
 	// Apply context deadline if any
 	if dl, ok := ctx.Deadline(); ok {
-		dur := dl.Sub(time.Now())
+		dur := time.Until(dl)
 		if dur < 0 {
 			dur = 0
 		}
