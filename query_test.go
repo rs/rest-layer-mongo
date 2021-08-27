@@ -1,8 +1,8 @@
 package mongo
 
 import (
-	"errors"
 	"reflect"
+	"regexp"
 	"testing"
 
 	"github.com/rs/rest-layer/resource"
@@ -25,36 +25,134 @@ func (u UnsupportedExpression) String() string {
 	return ""
 }
 
-func TestTranslatePredicate(t *testing.T) {
+func TestTranslatePredicateString(t *testing.T) {
 	cases := []struct {
 		predicate string
-		err       error
 		want      bson.M
 	}{
-		{`{id:"foo"}`, nil, bson.M{"_id": "foo"}},
-		{`{f:"foo"}`, nil, bson.M{"f": "foo"}},
-		{`{f:"foo",g:"baz"}`, nil, bson.M{"f": "foo", "g": "baz"}},
-		{`{f:{$ne:"foo"}}`, nil, bson.M{"f": bson.M{"$ne": "foo"}}},
-		{`{f:{$exists:true}}`, nil, bson.M{"f": bson.M{"$exists": true}}},
-		{`{f:{$exists:false}}`, nil, bson.M{"f": bson.M{"$exists": false}}},
-		{`{f:{$gt:1}}`, nil, bson.M{"f": bson.M{"$gt": float64(1)}}},
-		{`{f:{$gte:1}}`, nil, bson.M{"f": bson.M{"$gte": float64(1)}}},
-		{`{f:{$lt:1}}`, nil, bson.M{"f": bson.M{"$lt": float64(1)}}},
-		{`{f:{$lte:1}}`, nil, bson.M{"f": bson.M{"$lte": float64(1)}}},
-		{`{f:{$in:["foo","bar"]}}`, nil, bson.M{"f": bson.M{"$in": []interface{}{"foo", "bar"}}}},
-		{`{f:{$nin:["foo","bar"]}}`, nil, bson.M{"f": bson.M{"$nin": []interface{}{"foo", "bar"}}}},
-		{`{f:{$regex:"fo[o]{1}.+is.+some"}}`, nil, bson.M{"f": bson.M{"$regex": "fo[o]{1}.+is.+some"}}},
-		{`{$and:[{f:"foo"},{f:"bar"}]}`, nil, bson.M{"$and": []bson.M{{"f": "foo"}, {"f": "bar"}}}},
-		{`{$or:[{f:"foo"},{f:"bar"}]}`, nil, bson.M{"$or": []bson.M{{"f": "foo"}, {"f": "bar"}}}},
-		{`{$or:[{f:"foo"},{f:"bar",g:"baz"}]}`, nil, bson.M{"$or": []bson.M{{"f": "foo"}, {"$and": []bson.M{{"f": "bar"}, {"g": "baz"}}}}}},
-		{`{f:{$elemMatch:{a:"foo",b:"bar"}}}`, nil, bson.M{"f": bson.M{"$elemMatch": bson.M{"a": "foo", "b": "bar"}}}},
+		{`{id:"foo"}`, bson.M{"_id": "foo"}},
+		{`{f:"foo"}`, bson.M{"f": "foo"}},
+		{`{f:"foo",g:"baz"}`, bson.M{"f": "foo", "g": "baz"}},
+		{`{f:{$ne:"foo"}}`, bson.M{"f": bson.M{"$ne": "foo"}}},
+		{`{f:{$exists:true}}`, bson.M{"f": bson.M{"$exists": true}}},
+		{`{f:{$exists:false}}`, bson.M{"f": bson.M{"$exists": false}}},
+		{`{f:{$gt:1}}`, bson.M{"f": bson.M{"$gt": float64(1)}}},
+		{`{f:{$gte:1}}`, bson.M{"f": bson.M{"$gte": float64(1)}}},
+		{`{f:{$lt:1}}`, bson.M{"f": bson.M{"$lt": float64(1)}}},
+		{`{f:{$lte:1}}`, bson.M{"f": bson.M{"$lte": float64(1)}}},
+		{`{f:{$in:["foo","bar"]}}`, bson.M{"f": bson.M{"$in": []interface{}{"foo", "bar"}}}},
+		{`{f:{$nin:["foo","bar"]}}`, bson.M{"f": bson.M{"$nin": []interface{}{"foo", "bar"}}}},
+		{`{f:{$regex:"fo[o]{1}.+is.+some"}}`, bson.M{"f": bson.M{"$regex": "fo[o]{1}.+is.+some"}}},
+		{`{$and:[{f:"foo"},{f:"bar"}]}`, bson.M{"$and": []bson.M{{"f": "foo"}, {"f": "bar"}}}},
+		{`{$or:[{f:"foo"},{f:"bar"}]}`, bson.M{"$or": []bson.M{{"f": "foo"}, {"f": "bar"}}}},
+		{`{$or:[{f:"foo"},{f:"bar",g:"baz"}]}`, bson.M{"$or": []bson.M{{"f": "foo"}, {"$and": []bson.M{{"f": "bar"}, {"g": "baz"}}}}}},
+		{`{f:{$elemMatch:{a:"foo",b:"bar"}}}`, bson.M{"f": bson.M{"$elemMatch": bson.M{"a": "foo", "b": "bar"}}}},
 	}
 	for i := range cases {
 		tc := cases[i]
 		t.Run(tc.predicate, func(t *testing.T) {
 			got, err := translatePredicate(query.MustParsePredicate(tc.predicate))
-			if !errors.Is(err, tc.err) {
-				t.Errorf("translatePredicate error:\ngot:  %v\nwant: %v", err, tc.err)
+			if err != nil {
+				t.Errorf("translatePredicate error: %v", err)
+				return
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("translatePredicate:\ngot:  %#v\nwant: %#v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTranslatePredicate(t *testing.T) {
+	cases := []struct {
+		name      string
+		predicate query.Predicate
+		want      bson.M
+	}{
+		{
+			name: "and expressions",
+			predicate: query.Predicate{
+				&query.And{
+					&query.Equal{Field: "f", Value: "foo"},
+					&query.And{
+						&query.Equal{Field: "f", Value: "bar"},
+						&query.Equal{Field: "g", Value: "baz"},
+					},
+				},
+			},
+			want: bson.M{
+				"$and": []bson.M{
+					{"f": "foo"},
+					{"$and": []bson.M{{"f": "bar"}, {"g": "baz"}}},
+				},
+			},
+		},
+		{
+			name: "and predicates",
+			predicate: query.Predicate{
+				&query.And{
+					&query.Predicate{
+						&query.Regex{Field: "f", Value: regexp.MustCompile("^b??$")},
+					},
+					&query.Predicate{
+						&query.Equal{Field: "f", Value: "bar"},
+						&query.Equal{Field: "g", Value: "baz"},
+					},
+				},
+			},
+			want: bson.M{
+				"$and": []bson.M{
+					{"f": bson.M{"$regex": "^b??$"}},
+					{"f": "bar", "g": "baz"},
+				},
+			},
+		},
+		{
+			name: "or expressions",
+			predicate: query.Predicate{
+				&query.Or{
+					&query.Equal{Field: "f", Value: "foo"},
+					&query.And{
+						&query.Equal{Field: "f", Value: "bar"},
+						&query.Equal{Field: "g", Value: "baz"},
+					},
+				},
+			},
+			want: bson.M{
+				"$or": []bson.M{
+					{"f": "foo"},
+					{"$and": []bson.M{{"f": "bar"}, {"g": "baz"}}},
+				},
+			},
+		},
+		{
+			name: "or predicates",
+			predicate: query.Predicate{
+				&query.Or{
+					&query.Predicate{
+						&query.Equal{Field: "f", Value: "foo"},
+					},
+					&query.Predicate{
+						&query.Equal{Field: "f", Value: "bar"},
+						&query.Equal{Field: "g", Value: "baz"},
+					},
+				},
+			},
+			want: bson.M{
+				"$or": []bson.M{
+					{"f": "foo"},
+					{"f": "bar", "g": "baz"},
+				},
+			},
+		},
+	}
+	for i := range cases {
+		tc := cases[i]
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := translatePredicate(tc.predicate)
+			if err != nil {
+				t.Errorf("translatePredicate error: %v", err)
+				return
 			}
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("translatePredicate:\ngot:  %#v\nwant: %#v", got, tc.want)

@@ -421,9 +421,9 @@ func TestClearOffset(t *testing.T) {
 func TestFind(t *testing.T) {
 	allItems := []*resource.Item{
 		{ID: "1", Payload: map[string]interface{}{"id": "1", "name": "a", "age": 1}},
-		{ID: "2", Payload: map[string]interface{}{"id": "2", "name": "b", "age": 2}},
-		{ID: "3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
-		{ID: "4", Payload: map[string]interface{}{"id": "4", "name": "d", "age": 4}},
+		{ID: "2", Payload: map[string]interface{}{"id": "2", "name": "b", "age": 1}},
+		{ID: "3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 2}},
+		{ID: "4", Payload: map[string]interface{}{"id": "4", "name": "d", "age": 2}},
 		{ID: "5", Payload: map[string]interface{}{"id": "5", "name": "rest-layer-regexp"}},
 		{ID: "6", Payload: map[string]interface{}{"id": "6", "name": "f",
 			"arr": []interface{}{
@@ -538,7 +538,7 @@ func TestFind(t *testing.T) {
 		t.Run("then ItemList.Total should not be deduced", totalCheckFunc(-1, l))
 
 		expectItems := []*resource.Item{
-			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
+			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 2}},
 		}
 		t.Run("then ItemList.Items should contain the matching item", itemsCheckFunc(expectItems, l))
 	})
@@ -551,8 +551,8 @@ func TestFind(t *testing.T) {
 		t.Run("then ItemList.Total should be deduced correctly", totalCheckFunc(2, l))
 
 		expectItems := []*resource.Item{
-			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
-			{ID: "4", ETag: "p-4", Payload: map[string]interface{}{"id": "4", "name": "d", "age": 4}},
+			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 2}},
+			{ID: "4", ETag: "p-4", Payload: map[string]interface{}{"id": "4", "name": "d", "age": 2}},
 		}
 		t.Run("then ItemList.Items should include all matching items and ignore projection", itemsCheckFunc(expectItems, l))
 	})
@@ -564,7 +564,7 @@ func TestFind(t *testing.T) {
 		t.Run("then ItemList.Total should be deduced correctly", totalCheckFunc(1, l))
 
 		expectItems := []*resource.Item{
-			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
+			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 2}},
 		}
 		t.Run("then ItemList.Items should include the matching item", itemsCheckFunc(expectItems, l))
 	})
@@ -597,7 +597,7 @@ func TestFind(t *testing.T) {
 		t.Run("then ItemList.Total should not be deduced", totalCheckFunc(-1, l))
 
 		expectItems := []*resource.Item{
-			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
+			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 2}},
 		}
 		t.Run("then ItemList.Items should include the first matching item", itemsCheckFunc(expectItems, l))
 	})
@@ -609,8 +609,8 @@ func TestFind(t *testing.T) {
 		t.Run("then ItemList.Total should be deduced correctly", totalCheckFunc(2, l))
 
 		expectItems := []*resource.Item{
-			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 3}},
-			{ID: "4", ETag: "p-4", Payload: map[string]interface{}{"id": "4", "name": "d", "age": 4}},
+			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 2}},
+			{ID: "4", ETag: "p-4", Payload: map[string]interface{}{"id": "4", "name": "d", "age": 2}},
 		}
 		t.Run("then ItemList.Items should include all matching items", itemsCheckFunc(expectItems, l))
 	})
@@ -630,5 +630,61 @@ func TestFind(t *testing.T) {
 			}},
 		}
 		t.Run("then ItemList.Items should include the first matching item", itemsCheckFunc(expectItems, l))
+	})
+	t.Run("when quering with equivalent $and queries", func(t *testing.T) {
+		equivalents := []struct {
+			name      string
+			predicate query.Predicate
+		}{
+			{
+				name: "implicit and predicate",
+				predicate: query.Predicate{
+					&query.Equal{Field: "age", Value: 1},
+					&query.Equal{Field: "name", Value: "b"},
+				},
+			},
+			{
+				name: "explicit $and",
+				predicate: query.Predicate{
+					&query.And{
+						&query.Equal{Field: "age", Value: 1},
+						&query.Equal{Field: "name", Value: "b"},
+					},
+				},
+			},
+			{
+				name: "explicit &or of implicit and predicate",
+				predicate: query.Predicate{
+					&query.Or{
+						query.Predicate{
+							&query.Equal{Field: "age", Value: 1},
+							&query.Equal{Field: "name", Value: "b"},
+						},
+					},
+				},
+			},
+			{
+				name: "explicit $and of predicates",
+				predicate: query.Predicate{
+					&query.And{
+						query.Predicate{&query.Equal{Field: "age", Value: 1}},
+						query.Predicate{&query.Equal{Field: "name", Value: "b"}},
+					},
+				},
+			},
+		}
+		for _, tc := range equivalents {
+			t.Run(tc.name, func(t *testing.T) {
+				l := doPositiveFindTest(t, h, &query.Query{
+					Predicate: tc.predicate,
+				})
+				t.Run("then ItemList.Total should be deduced correctly", totalCheckFunc(1, l))
+
+				expectItems := []*resource.Item{
+					{ID: "2", ETag: "p-2", Payload: map[string]interface{}{"id": "2", "name": "b", "age": 1}},
+				}
+				t.Run("then ItemList.Items should include the matching item", itemsCheckFunc(expectItems, l))
+			})
+		}
 	})
 }
