@@ -33,6 +33,7 @@ func TestTranslatePredicate(t *testing.T) {
 	}{
 		{`{id:"foo"}`, nil, bson.M{"_id": "foo"}},
 		{`{f:"foo"}`, nil, bson.M{"f": "foo"}},
+		{`{f:"foo",g:"baz"}`, nil, bson.M{"f": "foo", "g": "baz"}},
 		{`{f:{$ne:"foo"}}`, nil, bson.M{"f": bson.M{"$ne": "foo"}}},
 		{`{f:{$exists:true}}`, nil, bson.M{"f": bson.M{"$exists": true}}},
 		{`{f:{$exists:false}}`, nil, bson.M{"f": bson.M{"$exists": false}}},
@@ -45,6 +46,7 @@ func TestTranslatePredicate(t *testing.T) {
 		{`{f:{$regex:"fo[o]{1}.+is.+some"}}`, nil, bson.M{"f": bson.M{"$regex": "fo[o]{1}.+is.+some"}}},
 		{`{$and:[{f:"foo"},{f:"bar"}]}`, nil, bson.M{"$and": []bson.M{{"f": "foo"}, {"f": "bar"}}}},
 		{`{$or:[{f:"foo"},{f:"bar"}]}`, nil, bson.M{"$or": []bson.M{{"f": "foo"}, {"f": "bar"}}}},
+		{`{$or:[{f:"foo"},{f:"bar",g:"baz"}]}`, nil, bson.M{"$or": []bson.M{{"f": "foo"}, {"$and": []bson.M{{"f": "bar"}, {"g": "baz"}}}}}},
 		{`{f:{$elemMatch:{a:"foo",b:"bar"}}}`, nil, bson.M{"f": bson.M{"$elemMatch": bson.M{"a": "foo", "b": "bar"}}}},
 	}
 	for i := range cases {
