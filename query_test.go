@@ -1,6 +1,7 @@
 package mongo
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -42,15 +43,15 @@ func TestTranslatePredicate(t *testing.T) {
 		{`{f:{$in:["foo","bar"]}}`, nil, bson.M{"f": bson.M{"$in": []interface{}{"foo", "bar"}}}},
 		{`{f:{$nin:["foo","bar"]}}`, nil, bson.M{"f": bson.M{"$nin": []interface{}{"foo", "bar"}}}},
 		{`{f:{$regex:"fo[o]{1}.+is.+some"}}`, nil, bson.M{"f": bson.M{"$regex": "fo[o]{1}.+is.+some"}}},
-		{`{$and:[{f:"foo"},{f:"bar"}]}`, nil, bson.M{"$and": []bson.M{bson.M{"f": "foo"}, bson.M{"f": "bar"}}}},
-		{`{$or:[{f:"foo"},{f:"bar"}]}`, nil, bson.M{"$or": []bson.M{bson.M{"f": "foo"}, bson.M{"f": "bar"}}}},
+		{`{$and:[{f:"foo"},{f:"bar"}]}`, nil, bson.M{"$and": []bson.M{{"f": "foo"}, {"f": "bar"}}}},
+		{`{$or:[{f:"foo"},{f:"bar"}]}`, nil, bson.M{"$or": []bson.M{{"f": "foo"}, {"f": "bar"}}}},
 		{`{f:{$elemMatch:{a:"foo",b:"bar"}}}`, nil, bson.M{"f": bson.M{"$elemMatch": bson.M{"a": "foo", "b": "bar"}}}},
 	}
 	for i := range cases {
 		tc := cases[i]
 		t.Run(tc.predicate, func(t *testing.T) {
 			got, err := translatePredicate(query.MustParsePredicate(tc.predicate))
-			if !reflect.DeepEqual(err, tc.err) {
+			if !errors.Is(err, tc.err) {
 				t.Errorf("translatePredicate error:\ngot:  %v\nwant: %v", err, tc.err)
 			}
 			if !reflect.DeepEqual(got, tc.want) {
