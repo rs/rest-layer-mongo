@@ -579,6 +579,26 @@ func TestFind(t *testing.T) {
 		}
 		t.Run("then ItemList.Items should include the matching item", itemsCheckFunc(expectItems, l))
 	})
+	t.Run("when querying using $not regex", func(t *testing.T) {
+		l := doPositiveFindTest(t, h, &query.Query{
+			Predicate: query.MustParsePredicate(`{name:{$not:"^re[s]{1}t-.+yer.+exp$"}}`),
+		})
+		t.Run("then ItemList.Total should be deduced correctly", totalCheckFunc(5, l))
+
+		expectItems := []*resource.Item{
+			{ID: "1", ETag: "p-1", Payload: map[string]interface{}{"id": "1", "name": "a", "age": 1}},
+			{ID: "2", ETag: "p-2", Payload: map[string]interface{}{"id": "2", "name": "b", "age": 1}},
+			{ID: "3", ETag: "p-3", Payload: map[string]interface{}{"id": "3", "name": "c", "age": 2}},
+			{ID: "4", ETag: "p-4", Payload: map[string]interface{}{"id": "4", "name": "d", "age": 2}},
+			{ID: "6", ETag: "p-6", Payload: map[string]interface{}{"id": "6", "name": "f",
+				"arr": []interface{}{
+					map[string]interface{}{"a": "foo", "b": "bar"},
+					map[string]interface{}{"a": "foo", "b": "baz"},
+				},
+			}},
+		}
+		t.Run("then ItemList.Items should include the matching item", itemsCheckFunc(expectItems, l))
+	})
 	t.Run("when querying for a non-existant ID with limit 1", func(t *testing.T) {
 		l := doPositiveFindTest(t, h, &query.Query{
 			Predicate: query.MustParsePredicate(`{id:"10"}`),

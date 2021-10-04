@@ -124,7 +124,11 @@ func translatePredicate(q query.Predicate) (bson.M, error) {
 		case *query.LowerOrEqual:
 			b[getField(t.Field)] = bson.M{"$lte": t.Value}
 		case *query.Regex:
-			b[getField(t.Field)] = bson.M{"$regex": t.Value.String()}
+			if t.Negated {
+				b[getField(t.Field)] = bson.M{"$not": bson.RegEx{Pattern: t.Value.String()}}
+			} else {
+				b[getField(t.Field)] = bson.M{"$regex": t.Value.String()}
+			}
 		default:
 			return nil, resource.ErrNotImplemented
 		}

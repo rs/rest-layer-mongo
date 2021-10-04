@@ -43,6 +43,7 @@ func TestTranslatePredicateString(t *testing.T) {
 		{`{f:{$in:["foo","bar"]}}`, bson.M{"f": bson.M{"$in": []interface{}{"foo", "bar"}}}},
 		{`{f:{$nin:["foo","bar"]}}`, bson.M{"f": bson.M{"$nin": []interface{}{"foo", "bar"}}}},
 		{`{f:{$regex:"fo[o]{1}.+is.+some"}}`, bson.M{"f": bson.M{"$regex": "fo[o]{1}.+is.+some"}}},
+		{`{f:{$not:"fo[o]{1}.+is.+some"}}`, bson.M{"f": bson.M{"$not": bson.RegEx{Pattern: "fo[o]{1}.+is.+some"}}}},
 		{`{$and:[{f:"foo"},{f:"bar"}]}`, bson.M{"$and": []bson.M{{"f": "foo"}, {"f": "bar"}}}},
 		{`{$or:[{f:"foo"},{f:"bar"}]}`, bson.M{"$or": []bson.M{{"f": "foo"}, {"f": "bar"}}}},
 		{`{$or:[{f:"foo"},{f:"bar",g:"baz"}]}`, bson.M{"$or": []bson.M{{"f": "foo"}, {"$and": []bson.M{{"f": "bar"}, {"g": "baz"}}}}}},
